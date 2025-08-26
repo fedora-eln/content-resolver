@@ -23,7 +23,6 @@ class ConfigManager:
         parser.add_argument("--use-cache", dest="use_cache", action='store_true', help="Use local data instead of pulling Content Resolver. Saves a lot of time! Needs a 'cache_data.json' file at the same location as the script is at.")
         parser.add_argument("--dev-buildroot", dest="dev_buildroot", action='store_true', help="Buildroot grows pretty quickly. Use a fake one for development.")
         parser.add_argument("--dnf-cache-dir", dest="dnf_cache_dir_override", help="Override the dnf cache_dir.")
-        parser.add_argument("--parallel-max", dest="parallel_max", default=os.cpu_count(), type=int, help="Max parallel processes to run")
         args = parser.parse_args()
 
         settings["configs"] = args.configs
@@ -31,7 +30,6 @@ class ConfigManager:
         settings["use_cache"] = args.use_cache
         settings["dev_buildroot"] = args.dev_buildroot
         settings["dnf_cache_dir_override"] = args.dnf_cache_dir_override
-        settings["parallel_max"] = args.parallel_max
 
         settings["root_log_deps_cache_path"] = "cache_root_log_deps.json"
 

@@ -1,6 +1,6 @@
 #! /usr/bin/python3
 
-import content_resolver.analyzer
+from content_resolver.analyzer import Analyzer
 import sys
 import urllib
 
@@ -16,6 +16,6 @@ with urllib.request.urlopen(root_log_url) as response:
     root_log_data = response.read()
     root_log_contents = root_log_data.decode('utf-8')
 
-required_pkg_names = content_resolver.analyzer._get_build_deps_from_a_root_log(root_log_contents)
+required_pkg_names = Analyzer._get_build_deps_from_a_root_log(None, root_log_contents)
 
 print(required_pkg_names)

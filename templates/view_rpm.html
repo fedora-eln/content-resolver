@@ -222,6 +222,53 @@
                         </div>
                         {% endif %}
                     </div>
+
+                    <div class="card border-secondary">
+                        <div class="card-body">
+                            <h5 class="card-title">Reverse boolean Weak runtime dependency of {{pkg.reverse_weak_dependency_of_pkg_names|count}}
+                                RPMs</h5>
+                            {% if pkg.reverse_weak_dependency_of_pkg_names %}
+                            <div class="card">
+    
+                                <table class="table-packages table-packages-muted">
+    
+                                    <tbody>
+                                        {% for srpm_name, srpm_nevrs in pkg.reverse_weak_dependency_of_pkg_names.items() |
+                                        sort(attribute='0')
+                                        %}
+                                        <tr>
+                                            <td>
+                                                <a href="view-rpm--{{view_conf.id}}--{{srpm_name}}.html">{{srpm_name}}</a>
+                                                {% if view_all_arches["pkgs_by_name"][srpm_name].placeholder %}<span
+                                                    class="text-muted">(placeholder)</span>{% endif %}
+                                                {% if
+                                                view_all_arches["pkgs_by_name"][srpm_name].unwanted_completely_in_list_ids
+                                                %}<span class="text-danger">(unwanted)</span>{% endif %}
+                                            </td>
+                                            <td>
+                                                {{pkg_why(view_all_arches["pkgs_by_name"][srpm_name])}}
+                                            </td>
+                                            <td>
+                                                {% for srpm_nevr in srpm_nevrs | sort %}
+                                                {{srpm_nevr}}<br>
+                                                {% endfor %}
+                                            </td>
+                                        </tr>
+    
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {% else %}
+                            <div class="card bg-light">
+                                <div class="card-body text-muted text-center">
+                                    No packages...
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
                 </div>
             </div>
         </div>
