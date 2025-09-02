@@ -664,6 +664,7 @@ class Analyzer():
             required_by = set()
             recommended_by = set()
             suggested_by = set()
+            supplements = set()
 
             for dep_pkg in dnf_query.filter(requires=[pkg]):
                 dep_pkg_id = "{name}-{evr}.{arch}".format(
@@ -689,10 +690,23 @@ class Analyzer():
             #        arch=dep_pkg.arch
             #    )
             #    suggested_by.add(dep_pkg_id)
+
+            # Find packages that this pkg supplements
+            for supplement_reldep in pkg.supplements:
+                # Find packages in the query that provide this supplement
+                providing_pkgs = dnf_query.filter(provides=[supplement_reldep])
+                for providing_pkg in providing_pkgs:
+                    supplement_pkg_id = "{name}-{evr}.{arch}".format(
+                        name=providing_pkg.name,
+                        evr=providing_pkg.evr,
+                        arch=providing_pkg.arch
+                    )
+                    supplements.add(supplement_pkg_id)
             
             relations[pkg_id] = {}
             relations[pkg_id]["required_by"] = sorted(list(required_by))
             relations[pkg_id]["recommended_by"] = sorted(list(recommended_by))
+            relations[pkg_id]["supplements"] = sorted(list(supplements))
             #relations[pkg_id]["suggested_by"] = sorted(list(suggested_by))
             relations[pkg_id]["suggested_by"] = []
             relations[pkg_id]["source_name"] = pkg.source_name
@@ -706,6 +720,7 @@ class Analyzer():
                 relations[placeholder_id]["required_by"] = []
                 relations[placeholder_id]["recommended_by"] = []
                 relations[placeholder_id]["suggested_by"] = []
+                relations[placeholder_id]["supplements"] = []
                 relations[placeholder_id]["reponame"] = None
             
             # TODO: triple for loop!!!!
@@ -1561,6 +1576,7 @@ class Analyzer():
         pkg["required_by"] = set()
         pkg["recommended_by"] = set()
         pkg["suggested_by"] = set()
+        pkg["supplements"] = set()
 
         return pkg
 
@@ -1685,6 +1701,7 @@ class Analyzer():
                 view["pkgs"][pkg_id]["required_by"].update(workload["pkg_relations"][pkg_id]["required_by"])
                 view["pkgs"][pkg_id]["recommended_by"].update(workload["pkg_relations"][pkg_id]["recommended_by"])
                 view["pkgs"][pkg_id]["suggested_by"].update(workload["pkg_relations"][pkg_id]["suggested_by"])
+                view["pkgs"][pkg_id]["supplements"].update(workload["pkg_relations"][pkg_id]["supplements"])
 
             # Packages added by this workload (required or dependency)
             for pkg_id in workload["pkg_added_ids"]:
@@ -1711,6 +1728,7 @@ class Analyzer():
                 view["pkgs"][pkg_id]["required_by"].update(workload["pkg_relations"][pkg_id]["required_by"])
                 view["pkgs"][pkg_id]["recommended_by"].update(workload["pkg_relations"][pkg_id]["recommended_by"])
                 view["pkgs"][pkg_id]["suggested_by"].update(workload["pkg_relations"][pkg_id]["suggested_by"])
+                view["pkgs"][pkg_id]["supplements"].update(workload["pkg_relations"][pkg_id]["supplements"])
 
             # And finally the non-existing, imaginary, package placeholders!
             for pkg_id in workload["pkg_placeholder_ids"]:
@@ -2387,6 +2405,7 @@ class Analyzer():
                     view["pkgs"][pkg_id]["required_by"].update(buildroot_srpm["pkg_relations"][pkg_id]["required_by"])
                     view["pkgs"][pkg_id]["recommended_by"].update(buildroot_srpm["pkg_relations"][pkg_id]["recommended_by"])
                     view["pkgs"][pkg_id]["suggested_by"].update(buildroot_srpm["pkg_relations"][pkg_id]["suggested_by"])
+                    view["pkgs"][pkg_id]["supplements"].update(buildroot_srpm["pkg_relations"][pkg_id]["supplements"])
 
                 # Packages needed on top of the base buildroot (required or dependency)
                 for pkg_id in buildroot_srpm["pkg_added_ids"]:
@@ -2418,6 +2437,7 @@ class Analyzer():
                     view["pkgs"][pkg_id]["required_by"].update(buildroot_srpm["pkg_relations"][pkg_id]["required_by"])
                     view["pkgs"][pkg_id]["recommended_by"].update(buildroot_srpm["pkg_relations"][pkg_id]["recommended_by"])
                     view["pkgs"][pkg_id]["suggested_by"].update(buildroot_srpm["pkg_relations"][pkg_id]["suggested_by"])
+                    view["pkgs"][pkg_id]["supplements"].update(buildroot_srpm["pkg_relations"][pkg_id]["supplements"])
             
             # Resetting the SRPMs, so only the new ones can be added
             srpm_ids_to_process = set()
@@ -2527,12 +2547,14 @@ class Analyzer():
             target_pkg["dependency_of_pkg_nevrs"] = set()
             target_pkg["hard_dependency_of_pkg_nevrs"] = set()
             target_pkg["weak_dependency_of_pkg_nevrs"] = set()
+            target_pkg["reverse_weak_dependency_of_pkg_nevrs"] = set()
+
 
             # Dependency of RPM Names
             target_pkg["dependency_of_pkg_names"] = {} # of set() of nevrs
             target_pkg["hard_dependency_of_pkg_names"] = {} # of set() of nevrs
             target_pkg["weak_dependency_of_pkg_names"] = {} # if set() of nevrs
-
+            target_pkg["reverse_weak_dependency_of_pkg_names"] = {} # if set() of nevrs
     
     def _populate_pkg_or_srpm_relations_fields(self, target_pkg, source_pkg, type = None, view = None):
 
@@ -2662,10 +2684,34 @@ class Analyzer():
                     if pkg_name not in target_pkg["weak_dependency_of_pkg_names"]:
                         target_pkg["weak_dependency_of_pkg_names"][pkg_name] = set()
                     target_pkg["weak_dependency_of_pkg_names"][pkg_name].add(pkg_nevr)
+
+            # Reverse weak dependency of (supplements)
+            for pkg_id in source_pkg["supplements"]:
+                pkg_name = pkg_id_to_name(pkg_id)
+
+                # This only happens in addon views, and only rarely.
+                # (see the long comment above)
+                if pkg_id not in view["pkgs"]:
+                    view_conf_id = view["view_conf_id"]
+                    view_conf = self.configs["views"][view_conf_id]
+                    if view_conf["type"] == "addon":
+                        continue
+
+                pkg = view["pkgs"][pkg_id]
+                pkg_nevr = "{name}-{evr}".format(
+                    name=pkg["name"],
+                    evr=pkg["evr"]
+                )
+                target_pkg["reverse_weak_dependency_of_pkg_nevrs"].add(pkg_nevr)
+
+                if pkg_name not in target_pkg["reverse_weak_dependency_of_pkg_names"]:
+                    target_pkg["reverse_weak_dependency_of_pkg_names"][pkg_name] = set()
+                target_pkg["reverse_weak_dependency_of_pkg_names"][pkg_name].add(pkg_nevr)
             
             # All types of dependency
             target_pkg["dependency_of_pkg_nevrs"].update(target_pkg["hard_dependency_of_pkg_nevrs"])
             target_pkg["dependency_of_pkg_nevrs"].update(target_pkg["weak_dependency_of_pkg_nevrs"])
+            target_pkg["dependency_of_pkg_nevrs"].update(target_pkg["reverse_weak_dependency_of_pkg_nevrs"])
 
             for pkg_name, pkg_nevrs in target_pkg["hard_dependency_of_pkg_names"].items():
                 if pkg_name not in target_pkg["dependency_of_pkg_names"]:
@@ -2679,6 +2725,11 @@ class Analyzer():
                 
                 target_pkg["dependency_of_pkg_names"][pkg_name].update(pkg_nevrs)
 
+            for pkg_name, pkg_nevrs in target_pkg["reverse_weak_dependency_of_pkg_names"].items():
+                if pkg_name not in target_pkg["dependency_of_pkg_names"]:
+                    target_pkg["dependency_of_pkg_names"][pkg_name] = set()
+
+                target_pkg["dependency_of_pkg_names"][pkg_name].update(pkg_nevrs)
             
 
         # TODO: add the levels
