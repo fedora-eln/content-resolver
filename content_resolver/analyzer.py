@@ -2279,7 +2279,8 @@ class Analyzer():
         for view_conf_id in self.configs["views"]:
             view_conf = self.configs["views"][view_conf_id]
 
-            if view_conf["type"] == "compose":
+            #if view_conf["type"] == "compose":
+            if True:
                 if view_conf["buildroot_strategy"] == "root_logs":
                     for arch in view_conf["architectures"]:
                         self._populate_buildroot_with_view_srpms(view_conf, arch)
@@ -2487,7 +2488,8 @@ class Analyzer():
         for view_conf_id in self.configs["views"]:
             view_conf = self.configs["views"][view_conf_id]
 
-            if view_conf["type"] == "compose":
+            #if view_conf["type"] == "compose":
+            if True:
                 if view_conf["buildroot_strategy"] == "root_logs":
                     for arch in view_conf["architectures"]:
                         self._add_buildroot_to_view(view_conf, arch)
@@ -2751,7 +2753,8 @@ class Analyzer():
                 view_all_arches["id"] = view_conf_id
                 view_all_arches["has_buildroot"] = False
 
-                if view_conf["type"] == "compose":
+                #if view_conf["type"] == "compose":
+                if True:
                     if view_conf["buildroot_strategy"] == "root_logs":
                         view_all_arches["has_buildroot"] = True
                 else:
