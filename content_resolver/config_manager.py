@@ -754,7 +754,7 @@ class ConfigManager:
                 filtered_workloads[workload_id] = workload_conf
 
         configs["workloads"] = filtered_workloads
-        log("  Filtered to {} workloads (from {})".format(len(configs["workloads"]), len(configs.get("workloads", {}))))
+        log("  Filtered to {} workloads".format(len(configs["workloads"])))
 
         # Step 2: Filter environments - only those matching selected labels
         filtered_envs = {}
@@ -767,7 +767,7 @@ class ConfigManager:
                 needed_repos_from_envs.update(env_conf.get("repositories", []))
 
         configs["envs"] = filtered_envs
-        log("  Filtered to {} environments (from {}) {}".format(len(configs["envs"]), len(configs.get("envs", {})),  ", ".join(sorted(configs["envs"]))))
+        log("  Filtered to {} environments: {}".format(len(configs["envs"]),  ", ".join(sorted(configs["envs"]))))
 
         # Step 3: Filter views - only those matching selected labels
         # Also handle addon views by including their base views if needed
@@ -799,7 +799,7 @@ class ConfigManager:
                     err_log("Warning: Base view '{}' not found for addon view".format(base_view_id))
 
         configs["views"] = filtered_views
-        log("  Filtered to {} views (from {})".format(len(configs["views"]), len(configs.get("views", {}))))
+        log("  Filtered to {} views: {}".format(len(configs["views"]),  ", ".join(sorted(configs["views"]))))
 
         # Step 4: Filter repositories - only those referenced by filtered views or environments
         needed_repos = needed_repos_from_views | needed_repos_from_envs
@@ -810,7 +810,7 @@ class ConfigManager:
                 filtered_repos[repo_id] = repo_conf
 
         configs["repos"] = filtered_repos
-        log("  Filtered to {} repositories (from {}) {}".format(len(configs["repos"]), len(configs.get("repos", {})),  ", ".join(sorted(configs["repos"]))))
+        log("  Filtered to {} repositories: {}".format(len(configs["repos"]),  ", ".join(sorted(configs["repos"]))))
 
         log("")
         log("Config filtering complete!")
