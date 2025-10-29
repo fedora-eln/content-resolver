@@ -24,6 +24,7 @@ class ConfigManager:
         parser.add_argument("--dev-buildroot", dest="dev_buildroot", action='store_true', help="Buildroot grows pretty quickly. Use a fake one for development.")
         parser.add_argument("--dnf-cache-dir", dest="dnf_cache_dir_override", help="Override the dnf cache_dir.")
         parser.add_argument("--parallel-max", dest="parallel_max", default=os.cpu_count(), type=int, help="Max parallel processes to run")
+        parser.add_argument("--labels", dest="selected_labels", help="Comma-separated list of label IDs to process. If not specified, all labels are processed. Only workloads, environments, views, and repos matching the specified labels will be analyzed.")
         args = parser.parse_args()
 
         settings["configs"] = args.configs
@@ -32,6 +33,7 @@ class ConfigManager:
         settings["dev_buildroot"] = args.dev_buildroot
         settings["dnf_cache_dir_override"] = args.dnf_cache_dir_override
         settings["parallel_max"] = args.parallel_max
+        settings["selected_labels"] = args.selected_labels
 
         settings["root_log_deps_cache_path"] = "cache_root_log_deps.json"
 
@@ -720,6 +722,102 @@ class ConfigManager:
         return config
 
 
+    def filter_configs_by_labels(self, configs, selected_label_ids):
+        """
+        Filter configs to only include items matching the specified labels.
+
+        This method filters configs based on labels:
+        1. Workloads (matching labels)
+        2. Environments (matching labels)
+        3. Views (matching labels)
+        4. Repositories (referenced by filtered views and environments)
+
+        Args:
+            configs: The full configs dictionary
+            selected_label_ids: List of label IDs to filter by
+
+        Returns:
+            Filtered configs dictionary
+        """
+        log("")
+        log("Filtering configs to process only selected labels...")
+        log("Selected labels: {}".format(", ".join(selected_label_ids)))
+        log("")
+
+        needed_labels = set(selected_label_ids)
+
+        # Step 1: Filter workloads - only those matching selected labels
+        filtered_workloads = {}
+        for workload_id, workload_conf in configs["workloads"].items():
+            workload_labels = set(workload_conf.get("labels", []))
+            if workload_labels & needed_labels:  # If any label matches
+                filtered_workloads[workload_id] = workload_conf
+
+        configs["workloads"] = filtered_workloads
+        log("  Filtered to {} workloads".format(len(configs["workloads"])))
+
+        # Step 2: Filter environments - only those matching selected labels
+        filtered_envs = {}
+        needed_repos_from_envs = set()
+
+        for env_id, env_conf in configs["envs"].items():
+            env_labels = set(env_conf.get("labels", []))
+            if env_labels & needed_labels:  # If any label matches
+                filtered_envs[env_id] = env_conf
+                needed_repos_from_envs.update(env_conf.get("repositories", []))
+
+        configs["envs"] = filtered_envs
+        log("  Filtered to {} environments: {}".format(len(configs["envs"]),  ", ".join(sorted(configs["envs"]))))
+
+        # Step 3: Filter views - only those matching selected labels
+        # Also handle addon views by including their base views if needed
+        filtered_views = {}
+        needed_repos_from_views = set()
+        base_views_needed = set()
+
+        for view_id, view_conf in configs["views"].items():
+            view_labels = set(view_conf.get("labels", []))
+            if view_labels & needed_labels:  # If any label matches
+                filtered_views[view_id] = view_conf
+                if "repository" in view_conf:
+                    needed_repos_from_views.add(view_conf["repository"])
+
+                # If this is an addon view, we need to include its base view
+                if view_conf.get("type") == "addon":
+                    base_view_id = view_conf["base_view_id"]
+                    base_views_needed.add(base_view_id)
+
+        # Add base views for addon views
+        for base_view_id in base_views_needed:
+            if base_view_id not in filtered_views:
+                if base_view_id in configs["views"]:
+                    log("  Including base view '{}' (required by addon view)".format(base_view_id))
+                    filtered_views[base_view_id] = configs["views"][base_view_id]
+                    if "repository" in configs["views"][base_view_id]:
+                        needed_repos_from_views.add(configs["views"][base_view_id]["repository"])
+                else:
+                    err_log("Warning: Base view '{}' not found for addon view".format(base_view_id))
+
+        configs["views"] = filtered_views
+        log("  Filtered to {} views: {}".format(len(configs["views"]),  ", ".join(sorted(configs["views"]))))
+
+        # Step 4: Filter repositories - only those referenced by filtered views or environments
+        needed_repos = needed_repos_from_views | needed_repos_from_envs
+
+        filtered_repos = {}
+        for repo_id, repo_conf in configs["repos"].items():
+            if repo_id in needed_repos:
+                filtered_repos[repo_id] = repo_conf
+
+        configs["repos"] = filtered_repos
+        log("  Filtered to {} repositories: {}".format(len(configs["repos"]),  ", ".join(sorted(configs["repos"]))))
+
+        log("")
+        log("Config filtering complete!")
+        log("")
+
+        return configs
+
     def get_configs(self):
         log("")
 
@@ -984,23 +1082,30 @@ class ConfigManager:
         log("")
         log("")
 
+        # Step 3: Filter configs if --labels was specified
+        if self.settings.get("selected_labels"):
+            log("Summary Before Filtering:")
+            log("--------")
+            log("")
+            log("  - {} views".format(len(configs["views"])))
+            log("  - {} repositories".format(len(configs["repos"])))
+            log("  - {} environments".format(len(configs["envs"])))
+            log("  - {} workloads".format(len(configs["workloads"])))
+            log("  - {} exclusion lists".format(len(configs["unwanteds"])))
+            log("")
+            selected_label_ids = [v.strip() for v in self.settings["selected_labels"].split(",")]
+            configs = self.filter_configs_by_labels(configs, selected_label_ids)
+
         log("Summary:")
         log("--------")
         log("")
-        
-        log("Standard yaml configs:")
+        log("  - {} views".format(len(configs["views"])))
         log("  - {} repositories".format(len(configs["repos"])))
         log("  - {} environments".format(len(configs["envs"])))
         log("  - {} workloads".format(len(configs["workloads"])))
-        #log("  - {} labels".format(len(configs["labels"])))
-        log("  - {} views".format(len(configs["views"])))
         log("  - {} exclusion lists".format(len(configs["unwanteds"])))
         log("")
-        log("Additional configs: (soon to be deprecated)")
-        log("  - {} buildroots".format(len(configs["buildroots"])))
-        log("  - {} buildroot pkg relations JSONs".format(len(configs["buildroot_pkg_relations"])))
-        log("")
-        
+
 
 
         return configs
