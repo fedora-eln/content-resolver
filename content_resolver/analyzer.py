@@ -211,9 +211,13 @@ def _download_root_log_with_retry(root_log_url):
     MAX_TRIES = 10
     attempts = 0
 
+    request = urllib.request.Request(root_log_url)
+    request.add_header("Accept", "text/plain")
+    request.add_header("User-Agent", "ContentResolver/1.0")
+
     while attempts < MAX_TRIES:
         try:
-            with urllib.request.urlopen(root_log_url, timeout=20) as response:
+            with urllib.request.urlopen(request, timeout=20) as response:
                 root_log_data = response.read()
                 return root_log_data.decode('utf-8')
         except Exception:
@@ -635,8 +639,11 @@ class Analyzer():
             if repo["source"]["composeinfo"]:
                 # At this point, this is all I can do. Hate me or not, it gets us
                 # what we need and won't brake anything in case things go badly. 
+                request = urllib.request.Request(repo["source"]["composeinfo"])
+                request.add_header("Accept", "application/json")
+                request.add_header("User-Agent", "ContentResolver/1.0")
                 try:
-                    with urllib.request.urlopen(repo["source"]["composeinfo"]) as response:
+                    with urllib.request.urlopen(request) as response:
                         composeinfo_raw_response = response.read()
 
                     composeinfo_data = json.loads(composeinfo_raw_response)

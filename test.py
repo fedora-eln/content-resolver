@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
 
-import argparse, yaml, tempfile, os, subprocess, json, jinja2, datetime, copy, re, dnf, pprint, urllib.request, sys, koji
+import argparse, yaml, tempfile, os, subprocess, json, jinja2, datetime, copy, re, dnf, pprint, sys, koji
 import concurrent.futures
 import rpm_showme as showme
 from functools import lru_cache
