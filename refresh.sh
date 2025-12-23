@@ -49,4 +49,4 @@ podman run --rm -it --tmpfs /dnf_cachedir -v $WORK_DIR/content-resolver:/workspa
 cp $WORK_DIR/content-resolver/cache_root_log_deps.json $WORK_DIR/content-resolver/out/cache_root_log_deps.json || exit 1
 
 # Publish the site
-aws s3 sync  --exclude "/cs/" --delete $WORK_DIR/content-resolver/out s3://tiny.distro.builders || exit 1
+aws s3 sync --delete --exclude "cs/*" $WORK_DIR/content-resolver/out s3://tiny.distro.builders || exit 1
