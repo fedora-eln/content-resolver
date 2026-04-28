@@ -24,7 +24,7 @@ def log(msg):
 
 
 def err_log(msg):
-    print("ERROR LOG:  {}".format(msg), file=sys.stderr)
+    print(f"ERROR LOG:  {msg}", file=sys.stderr)
 
 def pkg_id_to_name(pkg_id):
     pkg_name = pkg_id.rsplit("-",2)[0]

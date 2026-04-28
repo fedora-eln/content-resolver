@@ -17,6 +17,7 @@ class Query():
         self.computed_data = {}
 
     def size(self, num, suffix='B'):
+        # FIXME: is this method required or used, same function is in utils.
         for unit in ['','k','M','G']:
             if abs(num) < 1024.0:
                 return "%3.1f %s%s" % (num, unit, suffix)
@@ -69,12 +70,7 @@ class Query():
             for env_conf_id in env_conf_ids:
                 for repo_id in repo_ids:
                     for arch in arches:
-                        workload_id = "{workload_conf_id}:{env_conf_id}:{repo_id}:{arch}".format(
-                            workload_conf_id=workload_conf_id,
-                            env_conf_id=env_conf_id,
-                            repo_id=repo_id,
-                            arch=arch
-                        )
+                        workload_id = f"{workload_conf_id}:{env_conf_id}:{repo_id}:{arch}"
                         if workload_id in self.data["workloads"].keys():
                             if not list_all:
                                 return True
@@ -154,11 +150,7 @@ class Query():
         for env_conf_id in env_conf_ids:
             for repo_id in repo_ids:
                 for arch in arches:
-                    env_id = "{env_conf_id}:{repo_id}:{arch}".format(
-                        env_conf_id=env_conf_id,
-                        repo_id=repo_id,
-                        arch=arch
-                    )
+                    env_id = f"{env_conf_id}:{repo_id}:{arch}"
                     if env_id in self.data["envs"].keys():
                         if not list_all:
                             return True
@@ -538,39 +530,19 @@ class Query():
         
         raise ValueError("That seems to be an invalid ID!")
     
+    # TODO: these function have similar output,  create a re-usable helper function
+
     def workload_url_slug(self, workload_conf_id, env_conf_id, repo_id, arch):
-        slug = "{workload_conf_id}--{env_conf_id}--{repo_id}--{arch}".format(
-            workload_conf_id=workload_conf_id,
-            env_conf_id=env_conf_id,
-            repo_id=repo_id,
-            arch=arch
-        )
-        return slug
+        return f"{workload_conf_id}--{env_conf_id}--{repo_id}--{arch}"
     
     def env_url_slug(self, env_conf_id, repo_id, arch):
-        slug = "{env_conf_id}--{repo_id}--{arch}".format(
-            env_conf_id=env_conf_id,
-            repo_id=repo_id,
-            arch=arch
-        )
-        return slug
+        return f"{env_conf_id}--{repo_id}--{arch}"
 
     def workload_id_string(self, workload_conf_id, env_conf_id, repo_id, arch):
-        slug = "{workload_conf_id}:{env_conf_id}:{repo_id}:{arch}".format(
-            workload_conf_id=workload_conf_id,
-            env_conf_id=env_conf_id,
-            repo_id=repo_id,
-            arch=arch
-        )
-        return slug
+        return f"{workload_conf_id}:{env_conf_id}:{repo_id}:{arch}"
     
     def env_id_string(self, env_conf_id, repo_id, arch):
-        slug = "{env_conf_id}:{repo_id}:{arch}".format(
-            env_conf_id=env_conf_id,
-            repo_id=repo_id,
-            arch=arch
-        )
-        return slug
+        return f"{env_conf_id}:{repo_id}:{arch}"
     
     def url_slug_id(self, any_id):
         return any_id.replace(":", "--")
@@ -582,9 +554,7 @@ class Query():
         labels = view_conf["labels"]
         
         if arch and arch not in self.settings["allowed_arches"]:
-            raise ValueError("Unsupported arch: {arch}".format(
-                arch=arch
-            ))
+            raise ValueError(f"Unsupported arch: {arch}")
         
         if arch and arch not in self.arches_in_view(view_conf_id):
             return []
@@ -742,7 +712,7 @@ class Query():
                     pkgs[placeholder_id]["description"] = placeholder["description"]
                     pkgs[placeholder_id]["summary"] = placeholder["description"]
                     pkgs[placeholder_id]["source_name"] = placeholder["srpm"]
-                    pkgs[placeholder_id]["sourcerpm"] = "{}-000-placeholder".format(placeholder["srpm"])
+                    pkgs[placeholder_id]["sourcerpm"] = f"{placeholder['srpm']}-000-placeholder"
                     pkgs[placeholder_id]["q_arch"] = arch
                     pkgs[placeholder_id]["q_in"] = set()
                     pkgs[placeholder_id]["q_required_in"] = set()
@@ -801,10 +771,7 @@ class Query():
                 if output_change == "ids":
                     pkg_names.add(pkg["id"])
                 elif output_change == "nevrs":
-                    pkg_names.add("{name}-{evr}".format(
-                        name=pkg["name"],
-                        evr=pkg["evr"]
-                    ))
+                    pkg_names.add(f"{pkg['name']}-{pkg['evr']}")
                 elif output_change == "binary_names":
                     pkg_names.add(pkg["name"])
                 elif output_change == "source_nvr":

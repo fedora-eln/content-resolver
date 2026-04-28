@@ -8,12 +8,12 @@ from content_resolver.exceptions import RepoDownloadError, BuildGroupAnalysisErr
 
 
 def pkg_placeholder_name_to_id(placeholder_name):
-    placeholder_id = "{name}-000-placeholder.placeholder".format(name=placeholder_name)
+    placeholder_id = f"{placeholder_name}-000-placeholder.placeholder"
     return placeholder_id
 
 
 def pkg_placeholder_name_to_nevr(placeholder_name):
-    placeholder_id = "{name}-000-placeholder".format(name=placeholder_name)
+    placeholder_id = f"{placeholder_name}-000-placeholder"
     return placeholder_id
 
 
@@ -495,9 +495,9 @@ class Analyzer():
             for repo_name, repo_data in repo["source"]["repos"].items():
                 if repo_data["limit_arches"]:
                     if arch not in repo_data["limit_arches"]:
-                        log("  Skipping {} on {}".format(repo_name, arch))
+                        log(f"  Skipping {repo_name} on {arch}")
                         continue
-                log("  Including {}".format(repo_name))
+                log(f"  Including {repo_name}")
 
                 additional_repo = dnf.repo.Repo(
                     name=repo_name,
@@ -888,7 +888,7 @@ class Analyzer():
                         repo=repo["id"],
                         arch=arch
                     ))
-                err_log("  - {err}".format(err=err))
+                err_log(f"  - {err}")
                 env["succeeded"] = False
                 env["errors"]["message"] = str(err)
                 return env
@@ -905,7 +905,7 @@ class Analyzer():
                         repo=repo["id"],
                         arch=arch
                     ))
-                err_log("  - {err}".format(err=err))
+                err_log(f"  - {err}")
                 env["succeeded"] = False
                 env["errors"]["message"] = str(err)
                 return env
@@ -919,7 +919,7 @@ class Analyzer():
                         repo=repo["id"],
                         arch=arch
                     ))
-                err_log("  - {err}".format(err=err))
+                err_log(f"  - {err}")
                 env["succeeded"] = False
                 env["errors"]["message"] = str(err)
                 return env
@@ -1343,8 +1343,8 @@ class Analyzer():
 
             # Log progress
             self.workload_queue_counter_current += 1
-            log("[{} of {}]".format(self.workload_queue_counter_current, self.workload_queue_counter_total))
-            log("Analyzing workload: {}".format(workload_id))
+            log(f"[{self.workload_queue_counter_current} of {self.workload_queue_counter_total}]")
+            log(f"Analyzing workload: {workload_id}")
             log("")
 
             queue_result = multiprocessing.Queue()
@@ -1388,10 +1388,10 @@ class Analyzer():
                 log("ERROR: Workload analysis failed")
                 log("")
                 log("Details:")
-                log("  workload_conf: {}".format(workload_conf["id"]))
-                log("  env_conf:      {}".format(env_conf["id"]))
-                log("  repo:          {}".format(repo["id"]))
-                log("  arch:          {}".format(arch))
+                log(f"  workload_conf: {workload_conf['id']}")
+                log(f"  env_conf:      {env_conf['id']}")
+                log(f"  repo:          {repo['id']}")
+                log(f"  arch:          {arch}")
                 log("")
                 log("More details somewhere above.")
                 log("")
@@ -1757,7 +1757,7 @@ class Analyzer():
 
                 # Initialise
                 if srpm_id not in view["source_pkgs"]:
-                    sourcerpm = "{}.src.rpm".format(srpm_id)
+                    sourcerpm = f"{srpm_id}.src.rpm"
                     view["source_pkgs"][srpm_id] = self._init_view_srpm({"sourcerpm": sourcerpm, "source_name": srpm_name, "reponame": None})
                 
                 # It's a placeholder
@@ -1925,7 +1925,7 @@ class Analyzer():
         """
         This function is idempotent!
         """
-        log("== Resolving SRPMs using root logs - pass {} (PARALLEL) ========".format(pass_counter))
+        log(f"== Resolving SRPMs using root logs - pass {pass_counter} (PARALLEL) ========")
 
         # Collect work items (skip cached entries)
         work_items = []
@@ -2156,7 +2156,7 @@ class Analyzer():
                         self.data["buildroot"]["srpms"][repo_id][arch][srpm_id]["queued"] = False
                         self.data["buildroot"]["srpms"][repo_id][arch][srpm_id]["processed"] = False
 
-        log("  Found {} new SRPMs!".format(counter))
+        log(f"  Found {counter} new SRPMs!")
         log("  DONE!")
         log("")
 
@@ -2301,10 +2301,10 @@ class Analyzer():
         while True:
             pass_counter += 1
 
-            self._record_metric("  started pass {}:".format(pass_counter))
+            self._record_metric(f"  started pass {pass_counter}:")
 
             log("")
-            log("== Buildroot resolution - pass {} ========".format(pass_counter))
+            log(f"== Buildroot resolution - pass {pass_counter} ========")
             log("")
             log("")
             # Get the directly_required_pkg_names from koji root logs
@@ -2327,7 +2327,7 @@ class Analyzer():
             # need their buildroots resolved! So let's find out if there are any
             new_srpms_count = self._expand_buildroot_srpms()
 
-            self._record_metric("    finished with new_srpms_count == {}".format(new_srpms_count))
+            self._record_metric(f"    finished with new_srpms_count == {new_srpms_count}")
 
             if not new_srpms_count:
                 log("")
@@ -2363,7 +2363,7 @@ class Analyzer():
 
 
         log("")
-        log("Adding buildroot to view {}...".format(view_id))
+        log(f"Adding buildroot to view {view_id}...")
 
         # Starting with all SRPMs in this view
         srpm_ids_to_process = set(view["source_pkgs"])
@@ -2376,7 +2376,7 @@ class Analyzer():
             level += 1
             added_pkg_ids = set()
 
-            log("  Pass {}...".format(level))
+            log(f"  Pass {level}...")
 
             # This is similar to adding workloads in _analyze_view()
             for buildroot_srpm_id in srpm_ids_to_process:
@@ -2474,8 +2474,8 @@ class Analyzer():
                 view["source_pkgs"][srpm_id]["level"][level]["dep"].update(pkg["level"][level]["dep"])
                 view["source_pkgs"][srpm_id]["level"][level]["env"].update(pkg["level"][level]["env"])
 
-            log ("    added {} RPMs".format(len(added_pkg_ids)))
-            log ("    added {} SRPMs".format(len(srpm_ids_to_process)))
+            log (f"    added {len(added_pkg_ids)} RPMs")
+            log (f"    added {len(srpm_ids_to_process)} SRPMs")
 
             # More iterations needed?
             if not srpm_ids_to_process:
@@ -2582,21 +2582,21 @@ class Analyzer():
 
         # Dependency relationships
         for list_type in ["all", "req", "dep", "env"]:
-            target_pkg["in_workload_ids_{}".format(list_type)].update(source_pkg["in_workload_ids_{}".format(list_type)])
+            target_pkg[f"in_workload_ids_{list_type}"].update(source_pkg[f"in_workload_ids_{list_type}"])
 
-            target_pkg["in_buildroot_of_srpm_id_{}".format(list_type)].update(source_pkg["in_buildroot_of_srpm_id_{}".format(list_type)])
+            target_pkg[f"in_buildroot_of_srpm_id_{list_type}"].update(source_pkg[f"in_buildroot_of_srpm_id_{list_type}"])
 
-            for workload_id in source_pkg["in_workload_ids_{}".format(list_type)]:
+            for workload_id in source_pkg[f"in_workload_ids_{list_type}"]:
                 workload_conf_id = workload_id_to_conf_id(workload_id)
-                target_pkg["in_workload_conf_ids_{}".format(list_type)].add(workload_conf_id)
+                target_pkg[f"in_workload_conf_ids_{list_type}"].add(workload_conf_id)
 
-            for srpm_id in source_pkg["in_buildroot_of_srpm_id_{}".format(list_type)]:
+            for srpm_id in source_pkg[f"in_buildroot_of_srpm_id_{list_type}"]:
                 srpm_name = pkg_id_to_name(srpm_id)
 
-                if srpm_name not in target_pkg["in_buildroot_of_srpm_name_{}".format(list_type)]:
-                    target_pkg["in_buildroot_of_srpm_name_{}".format(list_type)][srpm_name] = set()
+                if srpm_name not in target_pkg[f"in_buildroot_of_srpm_name_{list_type}"]:
+                    target_pkg[f"in_buildroot_of_srpm_name_{list_type}"][srpm_name] = set()
                 
-                target_pkg["in_buildroot_of_srpm_name_{}".format(list_type)][srpm_name].add(srpm_id)
+                target_pkg[f"in_buildroot_of_srpm_name_{list_type}"][srpm_name].add(srpm_id)
         
         # Level number
         level_number = 0
@@ -2670,7 +2670,7 @@ class Analyzer():
 
             # Weak dependency of
             for list_type in ["recommended", "suggested"]:
-                for pkg_id in source_pkg["{}_by".format(list_type)]:
+                for pkg_id in source_pkg[f"{list_type}_by"]:
                     pkg_name = pkg_id_to_name(pkg_id)
 
                     # This only happens in addon views, and only rarely.
@@ -3127,14 +3127,14 @@ class Analyzer():
             if view_conf["type"] == "addon":
                 continue
 
-            log("  {}".format(view_conf_id))
+            log(f"  {view_conf_id}")
 
             # Level 0
             level = str(0)
             sublevel = str(0)
             score = (level, sublevel)
 
-            log("    {}".format(score))
+            log(f"    {score}")
 
             # There's not much point in analyzing packages on multple levels.
             # For example, if someone explicitly requires glibc, I don't need to track
@@ -3199,7 +3199,7 @@ class Analyzer():
 
                     level_changes_made = False
 
-                    log("    {}".format(score))
+                    log(f"    {score}")
 
                     # Take all the direct build dependencies
                     # of the previous group, and assign them to the maintainers of packages
@@ -3294,7 +3294,7 @@ class Analyzer():
                     sublevel = str(int(sublevel) + 1)
                     score = (level, sublevel)
 
-                    log("    {}".format(score))
+                    log(f"    {score}")
 
                     for pkg_name, pkg in view_all_arches["pkgs_by_name"].items():
                         source_name = pkg["source_name"]
