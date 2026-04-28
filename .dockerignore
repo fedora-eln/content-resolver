@@ -1,0 +1,71 @@
+# Git files
+.git
+.gitignore
+.gitattributes
+
+# IDE and editor files
+.idea
+.vscode
+*.swp
+*.swo
+*~
+
+# Python cache and bytecode
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+.venv
+venv/
+ENV/
+env/
+
+# Output and cache directories
+output/
+tmp/
+
+# Build artifacts and logs
+*.log
+*.egg-info/
+dist/
+build/
+
+# Documentation (not needed in container)
+docs/
+*.md
+!README.md
+
+# Test and development files
+.pytest_cache/
+.coverage
+htmlcov/
+*.ipynb
+
+# Data files (generated)
+*.json
+!package.json
+data.json
+pkg_entries.json
+debug_*.json
+installs-cache.json
+
+# Docker files (we're already building)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# CI/CD
+.github/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+
+# Temporary files
+*.tmp
+*.temp

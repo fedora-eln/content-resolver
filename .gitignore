@@ -1,9 +1,19 @@
+# IDE and editor files
+.idea
+.vscode
+*.swp
+
+# Python cache and bytecode
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+
 config
 configs
 out
-*.swp
 installs-cache.json
-__pycache__
 output
 output.bak
 cache*
