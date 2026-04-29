@@ -7,19 +7,21 @@ on:
 jobs:
   setup_and_test:
     runs-on: ubuntu-latest
-    container: 
+    container:
       image: registry.fedoraproject.org/fedora:44
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
     steps:
-    
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
 
     - name: Update GPG keys
       run: dnf -y update fedora-gpg-keys
-        
+
     - name: Install git and Python libraries
       run: dnf -y install git-core python3-yaml python3-jinja2 python3-koji python3-pytest python3-flake8 python3-dnf
-    
+
     - name: Clean up
       run: dnf clean all
 
@@ -28,7 +30,7 @@ jobs:
 
     - name: Run the build
       run: ./content_resolver.py --dev-buildroot test_configs output
-    
+
     - name: Run tests
       run: |
         pytest
