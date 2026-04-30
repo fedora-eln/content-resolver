@@ -1,0 +1,80 @@
+name: Fork Local Testing
+
+# This workflow is fork-specific.
+# It's designed for local testing with 'act' and fork-specific CI validation.
+
+on:
+  push:
+    branches: [ feature/*, main, master ]
+  pull_request:
+    branches: [ feature/*, main, master ]
+
+
+jobs:
+  test:
+    # Only run on fork, not on PRs to upstream
+    if: github.repository != 'fedora-eln/content-resolver' || github.event_name == 'workflow_dispatch'
+
+    runs-on: ubuntu-latest
+    container:
+      image: registry.fedoraproject.org/fedora:44
+
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+
+    - name: Update GPG keys
+      run: dnf -y update fedora-gpg-keys
+
+    - name: Install dependencies
+      run: |
+        dnf -y install \
+          git \
+          python3-jinja2 \
+          python3-koji \
+          python3-yaml \
+          python3-dnf \
+          python3-pytest \
+          python3-flake8
+
+    - name: Clean up
+      run: dnf clean all
+
+    - name: Verify Python version
+      run: |
+        python3 --version
+        echo "Python location: $(which python3)"
+
+    - name: Create output directory
+      run: mkdir -p output/history
+
+    - name: Run the build
+      run: ./content_resolver.py --dev-buildroot test_configs output
+
+    - name: Run tests
+      run: |
+        pytest
+
+    - name: Show output summary
+      run: |
+        echo "=== Output Directory Contents ==="
+        ls -lh output/ || echo "No output directory"
+        echo ""
+        echo "=== Test Summary ==="
+        echo "Python version: $(python3 --version)"
+        echo "Fedora version: $(cat /etc/fedora-release)"
+        echo "Repository: ${{ github.repository }}"
+        echo "Branch: ${{ github.ref_name }}"
+
+    - name: Upload output artifacts (on failure)
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-output-${{ github.run_number }}
+        path: |
+          output/
+          *.log
+        retention-days: 7

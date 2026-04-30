@@ -165,7 +165,7 @@ def _generate_chartjs_data(historic_data, query):
                 size = entry["workloads"][workload_id]["size"]
 
                 # The chart needs the size in MB, but just as a number
-                size_mb = "{0:.1f}".format(size/1024/1024)
+                size_mb = f"{size/1024/1024:.1f}"
                 dataset["data"].append(size_mb)
             except KeyError:
                 dataset["data"].append("null")
@@ -212,7 +212,7 @@ def _generate_chartjs_data(historic_data, query):
                         size = entry["workloads"][workload_id]["size"]
 
                         # The chart needs the size in MB, but just as a number
-                        size_mb = "{0:.1f}".format(size/1024/1024)
+                        size_mb = f"{size/1024/1024:.1f}"
                         dataset["data"].append(size_mb)
                     except KeyError:
                         dataset["data"].append("null")
@@ -315,7 +315,7 @@ def _generate_chartjs_data(historic_data, query):
                             size = entry["workloads"][workload_id]["size"]
 
                             # The chart needs the size in MB, but just as a number
-                            size_mb = "{0:.1f}".format(size/1024/1024)
+                            size_mb = f"{size/1024/1024:.1f}"
                             dataset["data"].append(size_mb)
                         except KeyError:
                             dataset["data"].append("null")
@@ -358,7 +358,7 @@ def _generate_chartjs_data(historic_data, query):
                 size = entry["envs"][env_id]["size"]
 
                 # The chart needs the size in MB, but just as a number
-                size_mb = "{0:.1f}".format(size/1024/1024)
+                size_mb = f"{size/1024/1024:.1f}"
                 dataset["data"].append(size_mb)
             except KeyError:
                 dataset["data"].append("null")
@@ -405,7 +405,7 @@ def _generate_chartjs_data(historic_data, query):
                         size = entry["envs"][env_id]["size"]
 
                         # The chart needs the size in MB, but just as a number
-                        size_mb = "{0:.1f}".format(size/1024/1024)
+                        size_mb = f"{size/1024/1024:.1f}"
                         dataset["data"].append(size_mb)
                     except KeyError:
                         dataset["data"].append("null")
@@ -453,7 +453,7 @@ def _generate_chartjs_data(historic_data, query):
                         size = entry["envs"][env_id]["size"]
 
                         # The chart needs the size in MB, but just as a number
-                        size_mb = "{0:.1f}".format(size/1024/1024)
+                        size_mb = f"{size/1024/1024:.1f}"
                         dataset["data"].append(size_mb)
                     except KeyError:
                         dataset["data"].append("null")
@@ -526,7 +526,7 @@ def _generate_chartjs_data(historic_data, query):
         }
 
         for dataset_name in dataset_names:
-            dataset_key = "srpm_count_{}".format(dataset_name)
+            dataset_key = f"srpm_count_{dataset_name}"
 
             dataset = {}
             dataset["data"] = []

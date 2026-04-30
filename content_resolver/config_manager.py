@@ -104,7 +104,7 @@ class ConfigManager:
                     continue
                 config["source"]["architectures"].append(str(arch))
         except KeyError:
-            raise ConfigError("'{file}.yaml' - There's something wrong with the mandatory fields. Sorry I don't have more specific info.".format(file=document_id))
+            raise ConfigError(f"'{document_id}.yaml' - There's something wrong with the mandatory fields. Sorry I don't have more specific info.")
         
 
         for id, repo_data in document["data"]["source"]["repos"].items():
@@ -121,6 +121,7 @@ class ConfigManager:
             try:
                 config["source"]["repos"][id]["baseurl"] = repo_data["baseurl"]
             except KeyError:
+                # FIXME:  No reference for `yaml_file`
                 raise ConfigError("'{file}.yaml' - is invalid. Repo {id} doesn't list baseurl.".format(
                     file=yml_file,
                     id=id))
@@ -178,7 +179,7 @@ class ConfigManager:
                 config["labels"].append(str(repo))
 
         except KeyError:
-            raise ConfigError("'{file}.yaml' - There's something wrong with the mandatory fields. Sorry I don't have more specific info.".format(file=document_id))
+            raise ConfigError(f"'{document_id}.yaml' - There's something wrong with the mandatory fields. Sorry I don't have more specific info.")
 
         # Step 2: Optional fields
 
@@ -259,7 +260,7 @@ class ConfigManager:
                 config["labels"].append(str(repo))
 
         except KeyError:
-            raise ConfigError("'{file}.yaml' - There's something wrong with the mandatory fields. Sorry I don't have more specific info.".format(file=document_id))
+            raise ConfigError(f"'{document_id}.yaml' - There's something wrong with the mandatory fields. Sorry I don't have more specific info.")
 
         # Step 2: Optional fields
 
@@ -392,7 +393,7 @@ class ConfigManager:
             config["maintainer"] = str(document["data"]["maintainer"])
 
         except KeyError:
-            raise ConfigError("'{file}.yaml' - There's something wrong with the mandatory fields. Sorry I don't have more specific info.".format(file=document_id))
+            raise ConfigError(f"'{document_id}.yaml' - There's something wrong with the mandatory fields. Sorry I don't have more specific info.")
 
         # Step 2: Optional fields
         # none here
@@ -428,7 +429,7 @@ class ConfigManager:
             config["repository"] = str(document["data"]["repository"])
 
         except KeyError:
-            raise ConfigError("'{file}.yaml' - There's something wrong with the mandatory fields. Sorry I don't have more specific info.".format(file=document_id))
+            raise ConfigError(f"'{document_id}.yaml' - There's something wrong with the mandatory fields. Sorry I don't have more specific info.")
 
         # Step 2: Optional fields
 
@@ -506,7 +507,7 @@ class ConfigManager:
             config["repository"] = str(document["data"]["repository"])
 
         except KeyError:
-            raise ConfigError("'{file}.yaml' - There's something wrong with the mandatory fields. Sorry I don't have more specific info.".format(file=document_id))
+            raise ConfigError(f"'{document_id}.yaml' - There's something wrong with the mandatory fields. Sorry I don't have more specific info.")
         
         # Step 2: Optional fields
 
@@ -582,7 +583,7 @@ class ConfigManager:
                 config["labels"].append(str(repo))
         
         except KeyError:
-            raise ConfigError("'{file}.yaml' - There's something wrong with the mandatory fields. Sorry I don't have more specific info.".format(file=document_id))
+            raise ConfigError(f"'{document_id}.yaml' - There's something wrong with the mandatory fields. Sorry I don't have more specific info.")
         
         # Step 2: Optional fields
 
@@ -646,7 +647,7 @@ class ConfigManager:
             config["view_id"] = str(document["data"]["view_id"])
 
         except KeyError:
-            raise ConfigError("'{file}.yaml' - There's something wrong with the mandatory fields. Sorry I don't have more specific info.".format(file=document_id))
+            raise ConfigError(f"'{document_id}.yaml' - There's something wrong with the mandatory fields. Sorry I don't have more specific info.")
 
         # Step 2: Optional fields
         config["base_buildroot"] = {}
@@ -717,7 +718,7 @@ class ConfigManager:
             config["pkg_relations"] = document["data"]["pkgs"]
             
         except KeyError:
-            raise ConfigError("'{file}.yaml' - There's something wrong with the mandatory fields. Sorry I don't have more specific info.".format(file=document_id))
+            raise ConfigError(f"'{document_id}.yaml' - There's something wrong with the mandatory fields. Sorry I don't have more specific info.")
         
         return config
 
@@ -791,12 +792,12 @@ class ConfigManager:
         for base_view_id in base_views_needed:
             if base_view_id not in filtered_views:
                 if base_view_id in configs["views"]:
-                    log("  Including base view '{}' (required by addon view)".format(base_view_id))
+                    log(f"  Including base view '{base_view_id}' (required by addon view)")
                     filtered_views[base_view_id] = configs["views"][base_view_id]
                     if "repository" in configs["views"][base_view_id]:
                         needed_repos_from_views.add(configs["views"][base_view_id]["repository"])
                 else:
-                    err_log("Warning: Base view '{}' not found for addon view".format(base_view_id))
+                    err_log(f"Warning: Base view '{base_view_id}' not found for addon view")
 
         configs["views"] = filtered_views
         log("  Filtered to {} views: {}".format(len(configs["views"]),  ", ".join(sorted(configs["views"]))))
@@ -866,7 +867,7 @@ class ConfigManager:
                     
                     # Only accept yaml files stating their purpose!
                     if not ("document" in document and "version" in document):
-                        raise ConfigError("'{file}.yaml' - doesn't specify the 'document' and/or the 'version' field.".format(file=yml_file))
+                        raise ConfigError(f"'{yml_file}.yaml' - doesn't specify the 'document' and/or the 'version' field.")
 
 
                     # === Case: Repository config ===
@@ -939,9 +940,10 @@ class ConfigManager:
             log("  |")
 
             for message in serious_error_messages:
-                log("  |  {}".format(message))
+                log(f"  |  {message}")
             log("  -------------------------------------------------------------------------")
             log("")
+            # FIXME: settings may have no reference
             if settings.get("strict", False):
                 raise ConfigError("Config file errors encountered in strict mode")
         else:
@@ -975,7 +977,7 @@ class ConfigManager:
                 
                 # Only accept json files stating their purpose!
                 if not ("document_type" in json_data and "version" in json_data):
-                    raise ConfigError("'{file}.yaml' - doesn't specify the 'document' and/or the 'version' field.".format(file=json_file))
+                    raise ConfigError(f"'{json_file}.yaml' - doesn't specify the 'document' and/or the 'version' field.")
 
 
                 # === Case: Buildroot pkg relations data ===
@@ -993,7 +995,7 @@ class ConfigManager:
             log("  |")
 
             for message in serious_error_messages:
-                log("  |  {}".format(message))
+                log(f"  |  {message}")
             log("  -------------------------------------------------------------------------")
             log("")
             if self.settings.get("strict", False):
@@ -1027,7 +1029,7 @@ class ConfigManager:
         for view_conf_id, view_conf in configs["views"].items():
             if view_conf["type"] == "compose":
                 if view_conf["repository"] not in configs["repos"]:
-                    log("   View {} is referencing a non-existing repository. Removing it.".format(view_conf_id))
+                    log(f"   View {view_conf_id} is referencing a non-existing repository. Removing it.")
                     del configs["views"][view_conf_id]
 
         # Delete add-on views referencing non-existing or invalid base view
@@ -1035,13 +1037,13 @@ class ConfigManager:
             if view_conf["type"] == "addon":
                 base_view_id = view_conf["base_view_id"]
                 if base_view_id not in configs["views"]:
-                    log("   Addon view {} is referencing a non-existing base_view_id. Removing it.".format(view_conf_id))
+                    log(f"   Addon view {view_conf_id} is referencing a non-existing base_view_id. Removing it.")
                     del configs["views"][view_conf_id]
         
                 else:
                     base_view = configs["views"][base_view_id]
                     if base_view["type"] != "compose":
-                        log("   Addon view {} is referencing an addon base_view_id, which is not supported. Removing it.".format(view_conf_id))
+                        log(f"   Addon view {view_conf_id} is referencing an addon base_view_id, which is not supported. Removing it.")
                         del configs["views"][view_conf_id]
 
                 

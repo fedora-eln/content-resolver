@@ -3,20 +3,14 @@ from content_resolver.utils import dump_data, log
 
 
 def _generate_json_file(data, page_name, settings):
-    log("Generating the '{page_name}' JSON file...".format(
-        page_name=page_name
-    ))
+    log(f"Generating the '{page_name}' JSON file...")
 
     output = settings["output"]
 
-    filename = ("{page_name}.json".format(
-        page_name=page_name.replace(":", "--")
-    ))
-    log("  Writing file...  ({filename})".format(
-        filename=filename
-    ))
+    filename = f"{page_name.replace(':', '--')}.json"
+    log(f"  Writing file...  ({filename})")
     dump_data(os.path.join(output, filename), data)
-    
+
     log("  Done!")
     log("")
 
@@ -25,15 +19,11 @@ def _generate_txt_file(data_list, file_name, settings):
 
     file_contents = "\n".join(data_list)
 
-    filename = ("{file_name}.txt".format(
-        file_name=file_name.replace(":", "--")
-    ))
+    filename = f"{file_name.replace(':', '--')}.txt"
 
     output = settings["output"]
 
-    log("  Writing file...  ({filename})".format(
-        filename=filename
-    ))
+    log(f"  Writing file...  ({filename})")
     with open(os.path.join(output, filename), "w") as file:
         file.write(file_contents)
 
@@ -73,10 +63,7 @@ def _generate_view_lists(query):
 
             lists = {}
 
-            view_id = "{view_conf_id}:{arch}".format(
-                view_conf_id=view_conf_id,
-                arch=arch
-            )
+            view_id = f"{view_conf_id}:{arch}"
 
             view = query.data["views"][view_id]
 
@@ -146,11 +133,7 @@ def _generate_view_lists(query):
             for list_name, list_content in lists.items():
 
                 # Generate the arch-specific lists
-                file_name = "{list_name}--{view_conf_id}--{arch}".format(
-                    list_name=list_name,
-                    view_conf_id=view_conf_id,
-                    arch=arch
-                )
+                file_name = f"{list_name}--{view_conf_id}--{arch}"
                 _generate_txt_file(sorted(list(list_content)), file_name, query.settings)
 
                 # Populate the all-arch lists
@@ -162,10 +145,7 @@ def _generate_view_lists(query):
         for list_name, list_content in all_arches_lists.items():
 
             # Generate the all-arch lists
-            file_name = "{list_name}--{view_conf_id}".format(
-                list_name=list_name,
-                view_conf_id=view_conf_id
-            )
+            file_name = f"{list_name}--{view_conf_id}"
             _generate_txt_file(sorted(list(list_content)), file_name, query.settings)
     
     log("Done!")
@@ -184,12 +164,10 @@ def _generate_env_json_files(query):
         # === Config
 
         log("")
-        log("  Config for: {}".format(env_conf_id))
+        log(f"  Config for: {env_conf_id}")
 
         # Where to save
-        data_name = "env-conf--{env_conf_id_slug}".format(
-            env_conf_id_slug = query.url_slug_id(env_conf_id)
-        )
+        data_name = f"env-conf--{query.url_slug_id(env_conf_id)}"
 
         # What to save
         output_data = {}
@@ -206,12 +184,10 @@ def _generate_env_json_files(query):
         for env_id in query.envs(env_conf_id, None, None, list_all=True):
             env = query.data["envs"][env_id]
 
-            log("  Results: {}".format(env_id))
+            log(f"  Results: {env_id}")
 
             # Where to save
-            data_name = "env--{env_id_slug}".format(
-                env_id_slug = query.url_slug_id(env_id)
-            )
+            data_name = f"env--{query.url_slug_id(env_id)}"
 
             # What to save
             output_data = {}
@@ -239,12 +215,10 @@ def _generate_workload_json_files(query):
         # === Config
 
         log("")
-        log("  Config for: {}".format(workload_conf_id))
+        log(f"  Config for: {workload_conf_id}")
 
         # Where to save
-        data_name = "workload-conf--{workload_conf_id_slug}".format(
-            workload_conf_id_slug = query.url_slug_id(workload_conf_id)
-        )
+        data_name = f"workload-conf--{query.url_slug_id(workload_conf_id)}"
 
         # What to save
         output_data = {}
@@ -261,12 +235,10 @@ def _generate_workload_json_files(query):
         for workload_id in query.workloads(workload_conf_id, None, None, None, list_all=True):
             workload = query.data["workloads"][workload_id]
 
-            log("  Results: {}".format(workload_id))
+            log(f"  Results: {workload_id}")
 
             # Where to save
-            data_name = "workload--{workload_id_slug}".format(
-                workload_id_slug = query.url_slug_id(workload_id)
-            )
+            data_name = f"workload--{query.url_slug_id(workload_id)}"
 
             # What to save
             output_data = {}
@@ -293,11 +265,9 @@ def _generate_view_json_files(query):
         # =============
 
         # Where to save
-        data_name = "view-packages--{view_id_slug}".format(
-            view_id_slug = query.url_slug_id(view_conf_id)
-        )
+        data_name = f"view-packages--{query.url_slug_id(view_conf_id)}"
 
-        log("  {}".format(data_name))
+        log(f"  {data_name}")
 
         # What to save
         output_data = {}
@@ -329,11 +299,9 @@ def _generate_view_json_files(query):
         # =============
 
         # Where to save
-        data_name = "view-sources--{view_id_slug}".format(
-            view_id_slug = query.url_slug_id(view_conf_id)
-        )
+        data_name = f"view-sources--{query.url_slug_id(view_conf_id)}"
 
-        log("  {}".format(data_name))
+        log(f"  {data_name}")
 
         # What to save
         output_data = {}
@@ -367,11 +335,9 @@ def _generate_view_json_files(query):
         # =============
 
         # Where to save
-        data_name = "view-workloads--{view_id_slug}".format(
-            view_id_slug = query.url_slug_id(view_conf_id)
-        )
+        data_name = f"view-workloads--{query.url_slug_id(view_conf_id)}"
 
-        log("  {}".format(data_name))
+        log(f"  {data_name}")
 
         # What to save
         output_data = {}
