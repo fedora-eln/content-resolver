@@ -1,15 +1,34 @@
-import tempfile, os, json, datetime, urllib.request, sys, koji
-import re, time
+import asyncio
+import datetime
+import json
+import multiprocessing
+import os
+import re
+import sys
+import tempfile
+import time
+import urllib.request
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from contextlib import contextmanager
 
-import multiprocessing, asyncio
-import libdnf5.base
-import libdnf5.repo
-import libdnf5.rpm
-from content_resolver.utils import dump_data, load_data, log, err_log, pkg_id_to_name, size, workload_id_to_conf_id, url_to_id
-from content_resolver.exceptions import RepoDownloadError, BuildGroupAnalysisError, KojiRootLogError, AnalysisError
-from utils import dnf5_base
+import koji
+from libdnf5.base import Goal, GoalJobSettings
+from libdnf5.exception import Error as DnfErr
+from libdnf5.exception import UserAssertionError
+from libdnf5.repo import RepoQuery
+from libdnf5.rpm import PackageQuery
+
+from content_resolver.exceptions import AnalysisError, BuildGroupAnalysisError, KojiRootLogError, RepoDownloadError
+from content_resolver.utils import (
+    dnf5_base,
+    dump_data,
+    err_log,
+    load_data,
+    log,
+    pkg_id_to_name,
+    size,
+    url_to_id,
+    workload_id_to_conf_id,
+)
 
 
 def pkg_placeholder_name_to_id(placeholder_name):
@@ -193,7 +212,7 @@ def _get_koji_log_path(srpm_id, arch, koji_session):
             koji_pkg_data = koji_session.getRPM(f"{srpm_id}.src")
             koji_logs = koji_session.getBuildLogs(koji_pkg_data["build_id"])
             break
-        except Exception:
+        except koji.GenericError:
             attempts += 1
             if attempts == MAX_TRIES:
                 raise KojiRootLogError("Could not talk to Koji API")
@@ -519,7 +538,7 @@ class Analyzer():
             # streams would be normally hidden. So I mark all the available repos as
             # hotfix repos to make all packages visible, including non-enabled streams.
             # DNF5: Iterate repos using RepoQuery
-            repo_query = libdnf5.repo.RepoQuery(base)
+            repo_query =  RepoQuery(base)
             for repo_weak_ptr in repo_query:
                 repo_obj = repo_weak_ptr.get()
                 # DNF5: module_hotfixes is a config option
@@ -536,8 +555,7 @@ class Analyzer():
                     repo_sack.load_repos()
                     success = True
                     break
-                # TODO: add custom exceptions.RepoError
-                except Exception as err:
+                except (UserAssertionError, DNFErr) as err:
                     attempts +=1
                     log(f"  Failed to download repodata (attempt {attempts}/{MAX_TRIES}). Error: {err}")
             if not success:
@@ -550,7 +568,7 @@ class Analyzer():
                 raise RepoDownloadError(err)
 
             # DNF5: Create PackageQuery instead of using base.sack.query
-            query = libdnf5.rpm.PackageQuery(base)
+            query = PackageQuery(base)
 
             # Get all packages
             # DNF5: PackageQuery is directly iterable, don't call it
@@ -875,10 +893,10 @@ class Analyzer():
                     repo_sack.load_repos()
                     success = True
                     break
-                # TODO: add custom exceptions.RepoError
-                except Exception as err:
+                except ( UserAssertionError, DnfErr,RuntimeError) as e:
                     attempts +=1
-                    log("  Failed to download repodata. Trying again!")
+                    log("  Failed to download repodata. Trying again!", e)
+
             if not success:
                 err = "Failed to download repodata while analyzing environment '{env_conf}' from '{repo}' {arch}:".format(
                     env_conf=env_conf["id"],
@@ -889,15 +907,14 @@ class Analyzer():
                 raise RepoDownloadError(err)
 
             # DNF5: Create a Goal for package operations
-            goal = libdnf5.base.Goal(base)
+            goal = Goal(base)
 
             # Packages
             log("  Adding packages...")
             for pkg in env_conf["packages"]:
                 try:
                     goal.add_install(pkg)
-                # TODO: add custom exceptions.MarkingError
-                except Exception:
+                except  (UserAssertionError ,RepoRpmError) as e:
                     env["errors"]["non_existing_pkgs"].append(pkg)
                     continue
 
@@ -909,10 +926,9 @@ class Analyzer():
             for grp_spec in env_conf["groups"]:
                 try:
                     # DNF5: add_group_install takes spec and options
-                    settings = libdnf5.base.GoalJobSettings()
+                    settings =  GoalJobSettings()
                     goal.add_group_install(grp_spec, settings)
-                # TODO: add custom exceptions.MarkingError or exceptions.GroupError
-                except Exception:
+                except MarkingError:
                     env["errors"]["non_existing_pkgs"].append(grp_spec)
                     continue
 
@@ -920,8 +936,7 @@ class Analyzer():
             for pkg in env_conf["arch_packages"][arch]:
                 try:
                     goal.add_install(pkg)
-                # TODO: add custom exceptions.MarkingError
-                except Exception:
+                except (UserAssertionError ,RepoRpmError):
                     env["errors"]["non_existing_pkgs"].append(pkg)
                     continue
 
@@ -930,8 +945,7 @@ class Analyzer():
             try:
                 # DNF5: resolve via goal
                 transaction = goal.resolve()
-            # TODO: add custom exceptions.DepsolveError
-            except Exception as err:
+            except DepsolveError as err:
                 err_log("Failed to analyze environment '{env_conf}' from '{repo}' {arch}:".format(
                         env_conf=env_conf["id"],
                         repo=repo["id"],
@@ -949,8 +963,7 @@ class Analyzer():
             try:
                 # DNF5: download packages from transaction
                 transaction.download()
-            # TODO: add custom  exceptions.DownloadError
-            except Exception as err:
+            except (DownloadError) as err:
                 err_log("Failed to analyze environment '{env_conf}' from '{repo}' {arch}:".format(
                         env_conf=env_conf["id"],
                         repo=repo["id"],
@@ -965,8 +978,7 @@ class Analyzer():
             try:
                 # DNF5: run transaction
                 transaction.run()
-            # TODO: add custom exceptions.TransactionCheckError
-            except Exception as err:
+            except (TransactionCheckError) as err:
                 err_log("Failed to analyze environment '{env_conf}' from '{repo}' {arch}:".format(
                         env_conf=env_conf["id"],
                         repo=repo["id"],
@@ -986,7 +998,7 @@ class Analyzer():
             for i in range(trans_pkgs.size()):
                 trans_pkg = trans_pkgs[i]
                 pkg_list.append(trans_pkg.get_package())
-            query = libdnf5.rpm.PackageQuery(base)
+            query = PackageQuery(base)
             # Filter to only packages in our list
             query.filter_name([p.get_name() for p in pkg_list])
 
@@ -1166,8 +1178,7 @@ class Analyzer():
                         repo_sack.load_repos()
                         success = True
                         break
-                    # TODO: add custom exceptions.RepoError
-                    except Exception as err:
+                    except RepoError as err:
                         attempts +=1
                         #log("  Failed to download repodata. Trying again!")
                 if not success:
@@ -1183,15 +1194,14 @@ class Analyzer():
             # 37 %
 
             # DNF5: Create Goal for package operations
-            goal = libdnf5.base.Goal(base)
+            goal = Goal(base)
 
             # Packages
             #log("  Adding packages...")
             for pkg in workload_conf["packages"]:
                 try:
                     goal.add_install(pkg)
-                # TODO: add custom exceptions.MarkingError
-                except Exception:
+                except (UserAssertionError ,RepoRpmError):
                     if pkg in self.settings["weird_packages_that_can_not_be_installed"]:
                         continue
                     else:
@@ -1209,10 +1219,9 @@ class Analyzer():
             for grp_spec in workload_conf["groups"]:
                 try:
                     # DNF5: add_group_install with settings
-                    settings = libdnf5.base.GoalJobSettings()
+                    settings =  GoalJobSettings()
                     goal.add_group_install(grp_spec, settings)
-                # TODO: add custom exceptions.MarkingError or exceptions.GroupError
-                except Exception:
+                except MarkingError:
                     workload["errors"]["non_existing_pkgs"].append(grp_spec)
                     continue
 
@@ -1250,8 +1259,7 @@ class Analyzer():
                 for pkg in placeholder_data["requires"]:
                     try:
                         goal.add_install(pkg)
-                    # TODO: add custom exceptions.MarkingError
-                    except Exception:
+                    except  (UserAssertionError ,RepoRpmError):
                         if "strict" in workload_conf["options"]:
                             workload["errors"]["non_existing_placeholder_deps"].append(pkg)
                         else:
@@ -1262,8 +1270,7 @@ class Analyzer():
             for pkg in workload_conf["arch_packages"][arch]:
                 try:
                     goal.add_install(pkg)
-                # TODO: add custom exceptions.MarkingError
-                except Exception:
+                except (UserAssertionError ,RepoRpmError):
                     if "strict" in workload_conf["options"]:
                         workload["errors"]["non_existing_pkgs"].append(pkg)
                     else:
@@ -1319,8 +1326,7 @@ class Analyzer():
             try:
                 # DNF5: resolve via goal
                 transaction = goal.resolve()
-            # TODO: add custom exceptions.DepsolveError
-            except Exception as err:
+            except DepsolveError as err:
                 workload["succeeded"] = False
                 workload["errors"]["message"] = str(err)
                 #log("  Failed!  (Error message will be on the workload results page.")
@@ -1332,7 +1338,7 @@ class Analyzer():
             # DNF Query
             #log("  Creating a DNF Query object...")
             # Get installed packages from the system repo
-            query_env = libdnf5.rpm.PackageQuery(base)
+            query_env = PackageQuery(base)
             query_env.filter_installed()
             pkgs_env = set(query_env)
 
@@ -1346,7 +1352,7 @@ class Analyzer():
             pkgs_added = set(pkgs_added)
 
             pkgs_all = set.union(pkgs_env, pkgs_added)
-            query_all = libdnf5.rpm.PackageQuery(base)
+            query_all = PackageQuery(base)
             query_all.filter_name([p.get_name() for p in pkgs_all])
 
             # OK all good so save stuff now
