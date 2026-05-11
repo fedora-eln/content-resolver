@@ -53,21 +53,37 @@ def workload_id_to_conf_id(workload_id):
     workload_conf_id = workload_id.split(":")[0]
     return workload_conf_id
 
-def url_to_id(url):
 
-    # strip the protocol
-    if url.startswith("https://"):
-        url = url[8:]
-    elif url.startswith("http://"):
-        url = url[7:]
+def url_to_id(url: str) -> str:
+    """
+    Convert a URL to a filesystem-safe identifier.
 
-    # strip a potential leading /
-    if url.endswith("/"):
-        url = url[:-1]
+    Extracts the domain and path from a URL, strips the protocol and trailing slash,
+    and replaces all non-alphanumeric characters with hyphens to create a safe ID.
+    Consecutive non-alphanumeric characters are collapsed into a single hyphen.
 
-    # and replace all non-alphanumeric characters with -
-    regex = re.compile('[^0-9a-zA-Z]')
-    return regex.sub("-", url)
+    Args:
+        url (str): The URL to convert (e.g., "https://koji.fedoraproject.org/koji/")
+
+    Returns:
+        str: A filesystem-safe identifier with only alphanumeric characters and hyphens
+             (e.g., "koji-fedoraproject-org-koji")
+
+    Examples:
+        >>> url_to_id("https://koji.fedoraproject.org/koji/")
+        'koji-fedoraproject-org-koji'
+    """
+    # Parse the URL to extract components
+    parsed = urlparse(url)
+
+    # Combine netloc (domain/port) and path, strip trailing slashes
+    url_part = (parsed.netloc + parsed.path).rstrip('/')
+
+
+    # Replace all non-alphanumeric characters with -
+    regex = re.compile("[^0-9a-zA-Z]")
+    # The + in the regex collapses consecutive non-alphanumeric chars into one hyphen
+    return regex.sub("-", url_part).strip('-')
 
 
 def datetime_now_string():
