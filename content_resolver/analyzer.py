@@ -421,11 +421,9 @@ class Analyzer():
 
             time_diff = this_record["timestamp"] - prev_timestamp
 
-            print("  {} (+{} mins): {}".format(
-                this_record["timestamp"].strftime("%H:%M:%S"),
-                str(int(time_diff.seconds/60)).zfill(3),
-                this_record["name"]
-            ))
+            print(f"  {this_record['timestamp'].strftime('%H:%M:%S')} "
+                  f"(+{str(int(time_diff.seconds/60)).zfill(3)} mins): "
+                  f"{this_record['name']}")
 
             counter += 1
 
@@ -472,11 +470,7 @@ class Analyzer():
 
 
     def _analyze_pkgs(self, repo, arch):
-        log("Analyzing pkgs for {repo_name} ({repo_id}) {arch}".format(
-                repo_name=repo["name"],
-                repo_id=repo["id"],
-                arch=arch
-            ))
+        log(f"Analyzing pkgs for {repo['name']} ({repo['id']}) {arch}")
 
 
         with dnf5_base() as base:
@@ -485,17 +479,11 @@ class Analyzer():
             # Note: DNF5 doesn't have errorlevel/logfilelevel in same way
 
             # Local DNF cache
-            cachedir_name = "dnf_cachedir-{repo}-{arch}".format(
-                repo=repo["id"],
-                arch=arch
-            )
+            cachedir_name = f"dnf_cachedir-{repo['id']}-{arch}"
             config.get_cachedir_option().set(os.path.join(self.tmp_dnf_cachedir, cachedir_name))
 
             # Generic installroot
-            root_name = "dnf_generic_installroot-{repo}-{arch}".format(
-                repo=repo["id"],
-                arch=arch
-            )
+            root_name = f"dnf_generic_installroot-{repo['id']}-{arch}"
             config.get_installroot_option().set(os.path.join(self.tmp_installroots, root_name))
 
             # Architecture and Releasever
@@ -559,11 +547,7 @@ class Analyzer():
                     attempts +=1
                     log(f"  Failed to download repodata (attempt {attempts}/{MAX_TRIES}). Error: {err}")
             if not success:
-                err = "Failed to download repodata while analyzing repo '{repo_name} ({repo_id}) {arch}".format(
-                repo_name=repo["name"],
-                repo_id=repo["id"],
-                arch=arch
-                )
+                err = f"Failed to download repodata while analyzing repo '{repo['name']} ({repo['id']}) {arch}"
                 err_log(err)
                 raise RepoDownloadError(err)
 
@@ -575,15 +559,8 @@ class Analyzer():
             all_pkgs_set = set(query)
             pkgs = {}
             for pkg_object in all_pkgs_set:
-                pkg_nevra = "{name}-{evr}.{arch}".format(
-                    name=pkg_object.get_name(),
-                    evr=pkg_object.get_evr(),
-                    arch=pkg_object.get_arch()
-                )
-                pkg_nevr = "{name}-{evr}".format(
-                    name=pkg_object.get_name(),
-                    evr=pkg_object.get_evr()
-                )
+                pkg_nevra = f"{pkg_object.get_name()}-{pkg_object.get_evr()}.{pkg_object.get_arch()}"
+                pkg_nevr = f"{pkg_object.get_name()}-{pkg_object.get_evr()}"
                 pkg = {}
                 pkg["id"] = pkg_nevra
                 pkg["name"] = pkg_object.get_name()
@@ -612,11 +589,7 @@ class Analyzer():
                 repo_priorities[repo_name] = repo_data["priority"]
 
             for pkg_object in all_pkgs_set:
-                pkg_nevra = "{name}-{evr}.{arch}".format(
-                    name=pkg_object.get_name(),
-                    evr=pkg_object.get_evr(),
-                    arch=pkg_object.get_arch()
-                )
+                pkg_nevra = f"{pkg_object.get_name()}-{pkg_object.get_evr()}.{pkg_object.get_arch()}"
                 reponame = pkg_object.get_repo_id()
 
                 if "all_reponames" not in pkgs[pkg_nevra]:
@@ -637,9 +610,7 @@ class Analyzer():
                     if repo_priorities[reponame] == highest_repo_priority:
                         pkgs[pkg_nevra]["highest_priority_reponames"].add(reponame)
 
-            log("  Done!  ({pkg_count} packages in total)".format(
-                pkg_count=len(pkgs)
-            ))
+            log(f"  Done!  ({len(pkgs)} packages in total)")
             log("")
 
         return pkgs
@@ -686,11 +657,7 @@ class Analyzer():
 
         # Create empty relation entries for all packages
         for pkg in dnf_query:
-            pkg_id = "{name}-{evr}.{arch}".format(
-                name=pkg.get_name(),
-                evr=pkg.get_evr(),
-                arch=pkg.get_arch()
-            )
+            pkg_id = f"{pkg.get_name()}-{pkg.get_evr()}.{pkg.get_arch()}"
             relations[pkg_id] = {}
             relations[pkg_id]["required_by"] = []
             relations[pkg_id]["recommended_by"] = []
@@ -714,11 +681,7 @@ class Analyzer():
 
         # DNF5 filter API needs reimplementation below
         for pkg in dnf_query:
-            pkg_id = "{name}-{evr}.{arch}".format(
-                name=pkg.get_name(),
-                evr=pkg.get_evr(),
-                arch=pkg.get_arch()
-            )
+            pkg_id = f"{pkg.get_name()}-{pkg.get_evr()}.{pkg.get_arch()}"
 
             required_by = set()
             recommended_by = set()
@@ -726,20 +689,12 @@ class Analyzer():
             supplements = set()
 
             for dep_pkg in dnf_query.filter(requires=[pkg]):
-                dep_pkg_id = "{name}-{evr}.{arch}".format(
-                    name=dep_pkg.name,
-                    evr=dep_pkg.evr,
-                    arch=dep_pkg.arch
-                )
+                dep_pkg_id = f"{dep_pkg.name}-{dep_pkg.evr}.{dep_pkg.arch}"
                 required_by.add(dep_pkg_id)
 
             if self._global_performance_hack_run_recommends_queries:
                 for dep_pkg in dnf_query.filter(recommends=[pkg]):
-                    dep_pkg_id = "{name}-{evr}.{arch}".format(
-                        name=dep_pkg.name,
-                        evr=dep_pkg.evr,
-                        arch=dep_pkg.arch
-                    )
+                    dep_pkg_id = f"{dep_pkg.name}-{dep_pkg.evr}.{dep_pkg.arch}"
                     recommended_by.add(dep_pkg_id)
 
             #for dep_pkg in dnf_query.filter(suggests=[pkg]):
@@ -755,11 +710,7 @@ class Analyzer():
                 # Find packages in the query that provide this supplement
                 providing_pkgs = dnf_query.filter(provides=[supplement_reldep])
                 for providing_pkg in providing_pkgs:
-                    supplement_pkg_id = "{name}-{evr}.{arch}".format(
-                        name=providing_pkg.name,
-                        evr=providing_pkg.evr,
-                        arch=providing_pkg.arch
-                    )
+                    supplement_pkg_id = f"{providing_pkg.name}-{providing_pkg.evr}.{providing_pkg.arch}"
                     supplements.add(supplement_pkg_id)
 
             relations[pkg_id] = {}
@@ -842,18 +793,11 @@ class Analyzer():
             config.get_debuglevel_option().set(0)
 
             # Local DNF cache
-            cachedir_name = "dnf_cachedir-{repo}-{arch}".format(
-                repo=repo["id"],
-                arch=arch
-            )
+            cachedir_name = f"dnf_cachedir-{repo['id']}-{arch}"
             config.get_cachedir_option().set(os.path.join(self.tmp_dnf_cachedir, cachedir_name))
 
             # Environment installroot
-            root_name = "dnf_env_installroot-{env_conf}-{repo}-{arch}".format(
-                env_conf=env_conf["id"],
-                repo=repo["id"],
-                arch=arch
-            )
+            root_name = f"dnf_env_installroot-{env_conf['id']}-{repo['id']}-{arch}"
             config.get_installroot_option().set(os.path.join(self.tmp_installroots, root_name))
 
             # Architecture and Releasever
@@ -898,11 +842,7 @@ class Analyzer():
                     log("  Failed to download repodata. Trying again!", e)
 
             if not success:
-                err = "Failed to download repodata while analyzing environment '{env_conf}' from '{repo}' {arch}:".format(
-                    env_conf=env_conf["id"],
-                    repo=repo["id"],
-                    arch=arch
-                )
+                err = f"Failed to download repodata while analyzing environment '{env_conf['id']}' from '{repo['id']}' {arch}:"
                 err_log(err)
                 raise RepoDownloadError(err)
 
@@ -946,11 +886,7 @@ class Analyzer():
                 # DNF5: resolve via goal
                 transaction = goal.resolve()
             except DepsolveError as err:
-                err_log("Failed to analyze environment '{env_conf}' from '{repo}' {arch}:".format(
-                        env_conf=env_conf["id"],
-                        repo=repo["id"],
-                        arch=arch
-                    ))
+                err_log(f"Failed to analyze environment '{env_conf['id']}' from '{repo['id']}' {arch}:")
                 err_log(f"  - {err}")
                 env["succeeded"] = False
                 env["errors"]["message"] = str(err)
@@ -964,11 +900,7 @@ class Analyzer():
                 # DNF5: download packages from transaction
                 transaction.download()
             except (DownloadError) as err:
-                err_log("Failed to analyze environment '{env_conf}' from '{repo}' {arch}:".format(
-                        env_conf=env_conf["id"],
-                        repo=repo["id"],
-                        arch=arch
-                    ))
+                err_log(f"Failed to analyze environment '{env_conf['id']}' from '{repo['id']}' {arch}:")
                 err_log(f"  - {err}")
                 env["succeeded"] = False
                 env["errors"]["message"] = str(err)
@@ -979,11 +911,7 @@ class Analyzer():
                 # DNF5: run transaction
                 transaction.run()
             except (TransactionCheckError) as err:
-                err_log("Failed to analyze environment '{env_conf}' from '{repo}' {arch}:".format(
-                        env_conf=env_conf["id"],
-                        repo=repo["id"],
-                        arch=arch
-                    ))
+                err_log(f"Failed to analyze environment '{env_conf['id']}' from '{repo['id']}' {arch}:")
                 err_log(f"  - {err}")
                 env["succeeded"] = False
                 env["errors"]["message"] = str(err)
@@ -1003,18 +931,12 @@ class Analyzer():
             query.filter_name([p.get_name() for p in pkg_list])
 
             for pkg in query:
-                pkg_id = "{name}-{evr}.{arch}".format(
-                    name=pkg.get_name(),
-                    evr=pkg.get_evr(),
-                    arch=pkg.get_arch()
-                )
+                pkg_id = f"{pkg.get_name()}-{pkg.get_evr()}.{pkg.get_arch()}"
                 env["pkg_ids"].append(pkg_id)
 
             env["pkg_relations"] = self._analyze_package_relations(query)
 
-            log("  Done!  ({pkg_count} packages in total)".format(
-                pkg_count=len(env["pkg_ids"])
-            ))
+            log(f"  Done!  ({len(env['pkg_ids'])} packages in total)")
             log("")
 
         return env
@@ -1035,19 +957,9 @@ class Analyzer():
                     #    repos each config lists *
                     #    archeas each repo supports
                     # Analyze all of that!
-                    log("Analyzing {env_name} ({env_id}) from {repo_name} ({repo}) {arch}...".format(
-                        env_name=env_conf["name"],
-                        env_id=env_conf_id,
-                        repo_name=repo["name"],
-                        repo=repo_id,
-                        arch=arch
-                    ))
+                    log(f"Analyzing {env_conf['name']} ({env_conf_id}) from {repo['name']} ({repo_id}) {arch}...")
 
-                    env_id = "{env_conf_id}:{repo_id}:{arch}".format(
-                        env_conf_id=env_conf_id,
-                        repo_id=repo_id,
-                        arch=arch
-                    )
+                    env_id = f"{env_conf_id}:{repo_id}:{arch}"
                     envs[env_id] = self._analyze_env(env_conf, repo, arch)
 
         self.data["envs"] = envs
@@ -1119,20 +1031,13 @@ class Analyzer():
             config.get_debuglevel_option().set(0)
 
             # Local DNF cache
-            cachedir_name = "dnf_cachedir-{repo}-{arch}".format(
-                repo=repo["id"],
-                arch=arch
-            )
+            cachedir_name = f"dnf_cachedir-{repo['id']}-{arch}"
             config.get_cachedir_option().set(os.path.join(self.tmp_dnf_cachedir, cachedir_name))
 
             # Environment installroot
             # Since we're not writing anything into the installroot,
             # let's just use the base image's installroot!
-            root_name = "dnf_env_installroot-{env_conf}-{repo}-{arch}".format(
-                env_conf=env_conf["id"],
-                repo=repo["id"],
-                arch=arch
-            )
+            root_name = f"dnf_env_installroot-{env_conf['id']}-{repo['id']}-{arch}"
             config.get_installroot_option().set(os.path.join(self.tmp_installroots, root_name))
 
             # Architecture and Releasever
@@ -1182,12 +1087,7 @@ class Analyzer():
                         attempts +=1
                         #log("  Failed to download repodata. Trying again!")
                 if not success:
-                    err = "Failed to download repodata while analyzing workload '{workload_id} on '{env_id}' from '{repo}' {arch}...".format(
-                            workload_id=workload_conf_id,
-                            env_id=env_conf_id,
-                            repo_name=repo["name"],
-                            repo=repo_id,
-                            arch=arch)
+                    err = f"Failed to download repodata while analyzing workload '{workload_conf_id} on '{env_conf_id}' from '{repo_id}' {arch}..."
                     err_log(err)
                     raise RepoDownloadError(err)
 
@@ -1282,16 +1182,12 @@ class Analyzer():
                 if workload["errors"]["non_existing_pkgs"]:
                     error_message_list.append("The following required packages are not available:")
                     for pkg_name in workload["errors"]["non_existing_pkgs"]:
-                        pkg_string = "  - {pkg_name}".format(
-                            pkg_name=pkg_name
-                        )
+                        pkg_string = f"  - {pkg_name}"
                         error_message_list.append(pkg_string)
                 if workload["errors"]["non_existing_placeholder_deps"]:
                     error_message_list.append("The following dependencies of package placeholders are not available:")
                     for pkg_name in workload["errors"]["non_existing_placeholder_deps"]:
-                        pkg_string = "  - {pkg_name}".format(
-                            pkg_name=pkg_name
-                        )
+                        pkg_string = f"  - {pkg_name}"
                         error_message_list.append(pkg_string)
                 error_message = "\n".join(error_message_list)
                 workload["succeeded"] = False
@@ -1305,16 +1201,12 @@ class Analyzer():
                 if workload["warnings"]["non_existing_pkgs"]:
                     error_message_list.append("The following required packages are not available (and were skipped):")
                     for pkg_name in workload["warnings"]["non_existing_pkgs"]:
-                        pkg_string = "  - {pkg_name}".format(
-                            pkg_name=pkg_name
-                        )
+                        pkg_string = f"  - {pkg_name}"
                         error_message_list.append(pkg_string)
                 if workload["warnings"]["non_existing_placeholder_deps"]:
                     error_message_list.append("The following dependencies of package placeholders are not available (and were skipped):")
                     for pkg_name in workload["warnings"]["non_existing_placeholder_deps"]:
-                        pkg_string = "  - {pkg_name}".format(
-                            pkg_name=pkg_name
-                        )
+                        pkg_string = f"  - {pkg_name}"
                         error_message_list.append(pkg_string)
                 error_message = "\n".join(error_message_list)
                 workload["warnings"]["message"] = str(error_message)
@@ -1357,19 +1249,11 @@ class Analyzer():
 
             # OK all good so save stuff now
             for pkg in pkgs_env:
-                pkg_id = "{name}-{evr}.{arch}".format(
-                    name=pkg.get_name(),
-                    evr=pkg.get_evr(),
-                    arch=pkg.get_arch()
-                )
+                pkg_id = f"{pkg.get_name()}-{pkg.get_evr()}.{pkg.get_arch()}"
                 workload["pkg_env_ids"].append(pkg_id)
 
             for pkg in pkgs_added:
-                pkg_id = "{name}-{evr}.{arch}".format(
-                    name=pkg.get_name(),
-                    evr=pkg.get_evr(),
-                    arch=pkg.get_arch()
-                )
+                pkg_id = f"{pkg.get_name()}-{pkg.get_evr()}.{pkg.get_arch()}"
                 workload["pkg_added_ids"].append(pkg_id)
 
             # No errors so far? That means the analysis has succeeded,
@@ -1422,12 +1306,7 @@ class Analyzer():
             repo = task["repo"]
             arch = task["arch"]
 
-            workload_id = "{workload_conf_id}:{env_conf_id}:{repo_id}:{arch}".format(
-                workload_conf_id=workload_conf["id"],
-                env_conf_id=env_conf["id"],
-                repo_id=repo["id"],
-                arch=arch
-            )
+            workload_id = f"{workload_conf['id']}:{env_conf['id']}:{repo['id']}:{arch}"
 
             # Max processes
             while True:
@@ -1596,23 +1475,14 @@ class Analyzer():
 
                         # Before even started, look if the env succeeded. If not, there's
                         # no point in doing anything here.
-                        env_id = "{env_conf_id}:{repo_id}:{arch}".format(
-                            env_conf_id=env_conf["id"],
-                            repo_id=repo["id"],
-                            arch=arch
-                        )
+                        env_id = f"{env_conf['id']}:{repo['id']}:{arch}"
                         env = self.data["envs"][env_id]
 
                         if env["succeeded"]:
                             self._queue_workload_processing(workload_conf, env_conf, repo, arch)
 
                         else:
-                            workload_id = "{workload_conf_id}:{env_conf_id}:{repo_id}:{arch}".format(
-                                workload_conf_id=workload_conf_id,
-                                env_conf_id=env_conf_id,
-                                repo_id=repo_id,
-                                arch=arch
-                            )
+                            workload_id = f"{workload_conf_id}:{env_conf_id}:{repo_id}:{arch}"
                             self.data["workloads"][workload_id] = self._return_failed_workload_env_err(workload_conf, env_conf, repo, arch)
 
         asyncio.run(self._analyze_workloads_async(self.data["workloads"]))
@@ -1630,7 +1500,7 @@ class Analyzer():
                 "description": input_pkg["description"],
                 "summary": input_pkg["description"],
                 "source_name": input_pkg["srpm"],
-                "sourcerpm": "{}-000-placeholder".format(input_pkg["srpm"]),
+                "sourcerpm": f"{input_pkg['srpm']}-000-placeholder",
                 "q_arch": input_pkg,
                 "reponame": "n/a",
                 "all_reponames": set(),
@@ -1735,16 +1605,9 @@ class Analyzer():
     def _analyze_view(self, view_conf, arch, views):
         view_conf_id = view_conf["id"]
 
-        log("Analyzing view: {view_name} ({view_conf_id}) for {arch}".format(
-            view_name=view_conf["name"],
-            view_conf_id=view_conf_id,
-            arch=arch
-        ))
+        log(f"Analyzing view: {view_conf['name']} ({view_conf_id}) for {arch}")
 
-        view_id = "{view_conf_id}:{arch}".format(
-            view_conf_id=view_conf_id,
-            arch=arch
-        )
+        view_id = f"{view_conf_id}:{arch}"
 
         repo_id = view_conf["repository"]
 
@@ -1772,7 +1635,7 @@ class Analyzer():
 
             view["workload_ids"].append(workload_id)
 
-        log("  Includes {} workloads.".format(len(view["workload_ids"])))
+        log(f"  Includes {len(view['workload_ids'])} workloads.")
 
         # Packages
         for workload_id in view["workload_ids"]:
@@ -1866,17 +1729,14 @@ class Analyzer():
         if view_conf["type"] == "addon":
             base_view_conf_id = view_conf["base_view_id"]
 
-            base_view_id = "{base_view_conf_id}:{arch}".format(
-                base_view_conf_id=base_view_conf_id,
-                arch=arch
-            )
+            base_view_id = f"{base_view_conf_id}:{arch}"
 
             for base_view_pkg_id in views[base_view_id]["pkgs"]:
                 if base_view_pkg_id in view["pkgs"]:
                     del view["pkgs"][base_view_pkg_id]
 
         # Done with packages!
-        log("  Includes {} packages.".format(len(view["pkgs"])))
+        log(f"  Includes {len(view['pkgs'])} packages.")
 
         # But not with source packages, that's an entirely different story!
         for pkg_id, pkg in view["pkgs"].items():
@@ -1893,7 +1753,7 @@ class Analyzer():
             view["source_pkgs"][srpm_id]["in_workload_ids_dep"].update(pkg["in_workload_ids_dep"])
             view["source_pkgs"][srpm_id]["in_workload_ids_env"].update(pkg["in_workload_ids_env"])
 
-        log("  Includes {} source packages.".format(len(view["source_pkgs"])))
+        log(f"  Includes {len(view['source_pkgs'])} source packages.")
 
 
         log("  DONE!")
@@ -1938,16 +1798,9 @@ class Analyzer():
     def _populate_buildroot_with_view_srpms(self, view_conf, arch):
         view_conf_id = view_conf["id"]
 
-        log("Initialising buildroot packages of: {view_name} ({view_conf_id}) for {arch}".format(
-            view_name=view_conf["name"],
-            view_conf_id=view_conf_id,
-            arch=arch
-        ))
+        log(f"Initialising buildroot packages of: {view_conf['name']} ({view_conf_id}) for {arch}")
 
-        view_id = "{view_conf_id}:{arch}".format(
-            view_conf_id=view_conf_id,
-            arch=arch
-        )
+        view_id = f"{view_conf_id}:{arch}"
 
         view = self.data["views"][view_id]
         repo_id = view_conf["repository"]
@@ -2158,10 +2011,7 @@ class Analyzer():
 
             for arch in self.data["buildroot"]["srpms"][repo_id]:
 
-                generated_id = "CR-buildroot-base-env-{repo_id}-{arch}".format(
-                    repo_id=repo_id,
-                    arch=arch
-                )
+                generated_id = f"CR-buildroot-base-env-{repo_id}-{arch}"
 
                 # Using the _analyze_env function!
                 # So I need to reconstruct a fake env_conf
@@ -2177,10 +2027,7 @@ class Analyzer():
                 fake_env_conf["arch_packages"] = {}
                 fake_env_conf["arch_packages"][arch] = []
 
-                log("Resolving build group: {repo_id} {arch}".format(
-                    repo_id=repo_id,
-                    arch=arch
-                ))
+                log(f"Resolving build group: {repo_id} {arch}")
                 repo = self.configs["repos"][repo_id]
                 fake_env = self._analyze_env(fake_env_conf, repo, arch)
 
@@ -2335,12 +2182,7 @@ class Analyzer():
                     if srpm["processed"]:
                         continue
 
-                    fake_workload_id = "{workload_conf_id}:{env_conf_id}:{repo_id}:{arch}".format(
-                        workload_conf_id=srpm_id,
-                        env_conf_id=self.data["buildroot"]["build_groups"][repo_id][arch]["generated_id"],
-                        repo_id=repo_id,
-                        arch=arch
-                    )
+                    fake_workload_id = f"{srpm_id}:{self.data['buildroot']['build_groups'][repo_id][arch]['generated_id']}:{repo_id}:{arch}"
 
                     fake_workload = fake_workload_results[fake_workload_id]
 
@@ -2448,10 +2290,7 @@ class Analyzer():
 
         view_conf_id = view_conf["id"]
 
-        view_id = "{view_conf_id}:{arch}".format(
-            view_conf_id=view_conf_id,
-            arch=arch
-        )
+        view_id = f"{view_conf_id}:{arch}"
 
         repo_id = view_conf["repository"]
 
@@ -2754,10 +2593,7 @@ class Analyzer():
                         continue
 
                 pkg = view["pkgs"][pkg_id]
-                pkg_nevr = "{name}-{evr}".format(
-                    name=pkg["name"],
-                    evr=pkg["evr"]
-                )
+                pkg_nevr = f"{pkg['name']}-{pkg['evr']}"
                 target_pkg["hard_dependency_of_pkg_nevrs"].add(pkg_nevr)
 
                 if pkg_name not in target_pkg["hard_dependency_of_pkg_names"]:
@@ -2778,10 +2614,7 @@ class Analyzer():
                             continue
 
                     pkg = view["pkgs"][pkg_id]
-                    pkg_nevr = "{name}-{evr}".format(
-                        name=pkg["name"],
-                        evr=pkg["evr"]
-                    )
+                    pkg_nevr = f"{pkg['name']}-{pkg['evr']}"
                     target_pkg["weak_dependency_of_pkg_nevrs"].add(pkg_nevr)
 
                     if pkg_name not in target_pkg["weak_dependency_of_pkg_names"]:
@@ -2801,10 +2634,7 @@ class Analyzer():
                         continue
 
                 pkg = view["pkgs"][pkg_id]
-                pkg_nevr = "{name}-{evr}".format(
-                    name=pkg["name"],
-                    evr=pkg["evr"]
-                )
+                pkg_nevr = f"{pkg['name']}-{pkg['evr']}"
                 target_pkg["reverse_weak_dependency_of_pkg_nevrs"].add(pkg_nevr)
 
                 if pkg_name not in target_pkg["reverse_weak_dependency_of_pkg_names"]:
@@ -2892,10 +2722,7 @@ class Analyzer():
 
 
                 for arch in view_conf["architectures"]:
-                    view_id = "{view_conf_id}:{arch}".format(
-                        view_conf_id=view_conf_id,
-                        arch=arch
-                    )
+                    view_id = f"{view_conf_id}:{arch}"
 
                     view = self.data["views"][view_id]
 
@@ -3032,10 +2859,7 @@ class Analyzer():
                         view_all_arches["source_pkgs_by_name"][source_name]["pkg_names"].add(pkg["name"])
 
                         # Add package nevrs
-                        pkg_nevr = "{name}-{evr}".format(
-                            name=pkg["name"],
-                            evr=pkg["evr"]
-                        )
+                        pkg_nevr = f"{pkg['name']}-{pkg['evr']}"
                         view_all_arches["source_pkgs_by_name"][source_name]["pkg_nevrs"].add(pkg_nevr)
 
 
@@ -3177,10 +3001,7 @@ class Analyzer():
                 if view_conf["buildroot_strategy"] == "root_logs":
                     for arch in view_conf["architectures"]:
 
-                        view_id = "{view_conf_id}:{arch}".format(
-                            view_conf_id=view_conf_id,
-                            arch=arch
-                        )
+                        view_id = f"{view_conf_id}:{arch}"
 
                         view = self.data["views"][view_id]
 
