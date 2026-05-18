@@ -122,9 +122,6 @@ def _read_historic_data(query):
 
     return historic_data
 
-    log("  Done!")
-    log("")
-
 
 def _generate_chartjs_data(historic_data, query):
 
