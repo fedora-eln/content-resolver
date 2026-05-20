@@ -16,7 +16,7 @@ Content Resolver also helps with minimisation efforts by showing detailed depend
 
 Content Resolver is entirely controlled by a set of YAML files stored in a git repository. Changes to the content can easily be modified and reviewed via pull requests.
 
-[See Fedora's input repository](https://github.com/minimization/content-resolver-input)
+[See Fedora ELN's input repository](https://github.com/fedora-eln/content-resolver-input)
 
 ### Main concepts
 
@@ -64,7 +64,7 @@ Build dependencies are currently resolved in an external service (dep-tracker) b
 
 Current limitations: Because the build dependencies are resolved by an external service, the results might lag as much as several hours behind the runtime views. There is also currently no distinction between direct build dependencies and dependencies of build dependencies in on the package details page.
 
-There's [work being done (#27)](https://github.com/minimization/content-resolver/issues/27) to change the way build dependencies are resolved (using data from Koji rather than the SRPMs themselves) that will remove the current limitations.
+There's [work being done (#27)](https://github.com/fedora-eln/content-resolver/issues/27) to change the way build dependencies are resolved (using data from Koji rather than the SRPMs themselves) that will remove the current limitations.
 
 ### Reasons of Presence
 
@@ -80,7 +80,7 @@ Maintainers can flag certain packages as unwanted. That causes these packages to
 
 In combination with Reasons of Presence, this helps maintainers identify what dependencies need to be cut in order to remove the unwanted packages.
 
-Current limitations: There's currently only a single level of unwanted packages. But there's [work being done (#28)](https://github.com/minimization/content-resolver/issues/28) to allow additional levels, such as a distinction between "unwanted in the runtime set" vs. "unwanted in buildroot as well".
+Current limitations: There's currently only a single level of unwanted packages. But there's [work being done (#28)](https://github.com/fedora-eln/content-resolver/issues/28) to allow additional levels, such as a distinction between "unwanted in the runtime set" vs. "unwanted in buildroot as well".
 
 ### Maintainer recommendation
 
@@ -88,7 +88,7 @@ Because views are defined by multiple parties, it's not always clear who should 
 
 That's why Content Resolver helps identify who pulls each package into the set "the most" and recommends ownership based on that.
 
-Current limitations: Content Resolver doesn't look at anything else, just the dependencies and who pulled it in. But parties can volunteer to own a package. In that case, Content Resolver should be able to see that and show that instead. There's [work being done (#29)](https://github.com/minimization/content-resolver/issues/29) that will allow maintainers to accept a package, allowing Content Resolver to use this information when recommending owners.
+Current limitations: Content Resolver doesn't look at anything else, just the dependencies and who pulled it in. But parties can volunteer to own a package. In that case, Content Resolver should be able to see that and show that instead. There's [work being done (#29)](https://github.com/fedora-eln/content-resolver/issues/29) that will allow maintainers to accept a package, allowing Content Resolver to use this information when recommending owners.
 
 ## Running Content Resolver
 
