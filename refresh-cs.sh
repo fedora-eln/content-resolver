@@ -22,9 +22,9 @@ trap cleanup EXIT
 cd $WORK_DIR
 
 # Get the latest code repo and configs
-git clone https://github.com/minimization/content-resolver || exit 1
+git clone https://github.com/fedora-eln/content-resolver || exit 1
 cd content-resolver || exit 1
-git clone https://github.com/minimization/content-resolver-input || exit 1
+git clone https://github.com/fedora-eln/content-resolver-input || exit 1
 
 # Local output dir. Includes a dir for the history data, too.
 mkdir -p $WORK_DIR/content-resolver/out/history || exit 1

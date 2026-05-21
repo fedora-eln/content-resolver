@@ -221,7 +221,7 @@ def main():
     wishes_hardcoded = {
 
         # I found these in this in an old file here:
-        # https://github.com/minimization/content-resolver-input/blob/main/configs/eln-repo-split.yaml
+        # https://github.com/fedora-eln/content-resolver-input/blob/main/configs/eln-repo-split.yaml
         # It's a start!
         "BaseOS": [
             "attr",
