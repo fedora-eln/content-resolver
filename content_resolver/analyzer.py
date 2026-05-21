@@ -165,14 +165,14 @@ def _get_build_deps_from_a_root_log(root_log):
 
                 # TODO: line_len == 9 ??
 
-                elif line_len in (8, 3):
+                elif line_len in (3, 8):
                     pkg_name = split_line[2]
                     required_pkgs.append(pkg_name)
 
-                elif line_len in (7, 4):
+                elif line_len in (4, 7):
                     continue
 
-                elif line_len in (6, 5):
+                elif line_len in (5, 6):
                     # DNF5 uses B/KiB/MiB/GiB, DNF4 uses B/k/M/G
                     if split_line[4] in ["B", "KiB", "k", "MiB", "M", "GiB", "G"]:
                         continue
@@ -209,9 +209,13 @@ def _get_koji_log_path(srpm_id, arch, koji_session):
                 raise KojiRootLogError("Could not talk to Koji API")
             time.sleep(1)
 
-    koji_log_path = next(
-        (log["path"] for log in koji_logs if log["name"] == "root.log" and log["dir"] in (arch, "noarch")), None
-    )
+    # TODO: use `next` and comprehension for lazy evaluation next(x for x in koji_logs)
+    koji_log_path = None
+    for koji_log in koji_logs:
+        if koji_log["name"] == "root.log":
+            if koji_log["dir"] == arch or koji_log["dir"] == "noarch":
+                koji_log_path = koji_log["path"]
+                break
 
     return koji_log_path
 
@@ -261,14 +265,34 @@ def process_single_srpm_root_log(work_item):
             # Making sure there are 3 passes at least, but that it won't get overwhelmed
             srpm_name = srpm_id.rsplit("-", 2)[0]
             if srpm_name in ["bash", "make", "unzip"]:
-                return {"srpm_id": srpm_id, "arch": arch, "deps": ["gawk", "xz", "findutils"], "error": None}
+                return {
+                    'srpm_id': srpm_id,
+                    'arch': arch,
+                    'deps': ["gawk", "xz", "findutils"],
+                    'error': None
+                }
             elif srpm_name in ["gawk", "xz", "findutils"]:
-                return {"srpm_id": srpm_id, "arch": arch, "deps": ["cpio", "diffutils"], "error": None}
-            return {"srpm_id": srpm_id, "arch": arch, "deps": ["bash", "make", "unzip"], "error": None}
+                return {
+                    'srpm_id': srpm_id,
+                    'arch': arch,
+                    'deps': ['cpio', 'diffutils'],
+                    'error': None
+                }
+            return {
+                'srpm_id': srpm_id,
+                'arch': arch,
+                'deps': ["bash", "make", "unzip"],
+                'error': None
+            }
 
         # Handle special cases
         if srpm_id.rsplit("-", 2)[0] in ["shim"]:
-            return {"srpm_id": srpm_id, "arch": arch, "deps": [], "error": None}
+            return {
+                'srpm_id': srpm_id,
+                'arch': arch,
+                'deps': [],
+                'error': None
+            }
 
         # Create koji session
         koji_session = koji.ClientSession(koji_api_url, opts={"timeout": 20})
@@ -277,7 +301,12 @@ def process_single_srpm_root_log(work_item):
         koji_log_path = _get_koji_log_path(srpm_id, arch, koji_session)
 
         if not koji_log_path:
-            return {"srpm_id": srpm_id, "arch": arch, "deps": [], "error": None}
+            return {
+                'srpm_id': srpm_id,
+                'arch': arch,
+                'deps': [],
+                'error': None
+            }
 
         # Download root.log
         root_log_url = f"{koji_files_url}/{koji_log_path}"
@@ -286,14 +315,19 @@ def process_single_srpm_root_log(work_item):
         # Parse dependencies
         deps = _get_build_deps_from_a_root_log(root_log_contents)
 
-        return {"srpm_id": srpm_id, "arch": arch, "deps": deps, "error": None}
+        return {
+            'srpm_id': srpm_id,
+            'arch': arch,
+            'deps': deps,
+            'error': None
+        }
 
     except Exception as e:
         return {
-            "srpm_id": work_item.get("srpm_id", "unknown"),
-            "arch": work_item.get("arch", "unknown"),
-            "deps": [],
-            "error": str(e),
+            'srpm_id': work_item.get('srpm_id', 'unknown'),
+            'arch': work_item.get('arch', 'unknown'),
+            'deps': [],
+            'error': str(e)
         }
 
 
@@ -368,9 +402,15 @@ class Analyzer:
 
     def print_metrics(self):
         log("Additional metrics:")
+        # TODO: use `numerate(self.metrics_data)` instead of incrementing counter
+        counter = 0
 
-        for i, this_record in enumerate(self.metrics_data):
-            prev_timestamp = this_record["timestamp"] if i == 0 else self.metrics_data[i - 1]["timestamp"]
+        for this_record in self.metrics_data:
+
+            if counter == 0:
+                prev_timestamp = this_record["timestamp"]
+            else:
+                self.metrics_data[counter-1]["timestamp"]
 
             time_diff = this_record["timestamp"] - prev_timestamp
 
@@ -379,6 +419,9 @@ class Analyzer:
                 f"(+{str(int(time_diff.seconds / 60)).zfill(3)} mins): "
                 f"{this_record['name']}"
             )
+
+            counter += 1
+
 
     def _load_repo_cached(self, base, repo, arch):
         """
@@ -526,10 +569,10 @@ class Analyzer:
 
             # This sometimes fails, so let's try at least N times
             # before totally giving up!
-            MAX_TRIES = 10
+            max_tries = 10
             attempts = 0
             success = False
-            while attempts < MAX_TRIES:
+            while attempts < max_tries:
                 try:
                     # DNF5: load repos instead of fill_sack
                     repo_sack.load_repos()
@@ -537,7 +580,7 @@ class Analyzer:
                     break
                 except (UserAssertionError, DNFErr) as err:
                     attempts += 1
-                    log(f"  Failed to download repodata (attempt {attempts}/{MAX_TRIES}). Error: {err}")
+                    log(f"  Failed to download repodata (attempt {attempts}/{max_tries}). Error: {err}")
             if not success:
                 err = f"Failed to download repodata while analyzing repo '{repo['name']} ({repo['id']}) {arch}"
                 err_log(err)
@@ -620,9 +663,7 @@ class Analyzer:
                     composeinfo_data = json.loads(composeinfo_raw_response)
                     self.data["repos"][repo_id]["composeinfo"] = composeinfo_data
 
-                    compose_date = datetime.datetime.strptime(
-                        composeinfo_data["payload"]["compose"]["date"], "%Y%m%d"
-                    ).date()
+                    compose_date = datetime.datetime.strptime(composeinfo_data["payload"]["compose"]["date"], "%Y%m%d").date()
                     self.data["repos"][repo_id]["compose_date"] = compose_date.strftime("%Y-%m-%d")
 
                     date_now = datetime.datetime.now().date()
@@ -705,13 +746,13 @@ class Analyzer:
             relations[pkg_id]["required_by"] = sorted(list(required_by))
             relations[pkg_id]["recommended_by"] = sorted(list(recommended_by))
             relations[pkg_id]["supplements"] = sorted(list(supplements))
-            # relations[pkg_id]["suggested_by"] = sorted(list(suggested_by))
+            #relations[pkg_id]["suggested_by"] = sorted(list(suggested_by))
             relations[pkg_id]["suggested_by"] = []
             relations[pkg_id]["source_name"] = pkg.source_name
             relations[pkg_id]["reponame"] = pkg.reponame
 
         if package_placeholders:
-            for placeholder_name, placeholder_data in package_placeholders.items():
+            for placeholder_name,placeholder_data in package_placeholders.items():
                 placeholder_id = pkg_placeholder_name_to_id(placeholder_name)
 
                 relations[placeholder_id] = {}
@@ -756,17 +797,19 @@ class Analyzer:
         queue_result.put(env)
 
     def _analyze_env(self, env_conf, repo, arch):
-        env = {
-            "env_conf_id": env_conf["id"],
-            "pkg_ids": [],
-            "repo_id": repo["id"],
-            "arch": arch,
-            "pkg_relations": [],
-            "errors": {
-                "non_existing_pkgs": [],
-            },
-            "succeeded": True,
-        }
+        env = {}
+
+        env["env_conf_id"] = env_conf["id"]
+        env["pkg_ids"] = []
+        env["repo_id"] = repo["id"]
+        env["arch"] = arch
+
+        env["pkg_relations"] = []
+
+        env["errors"] = {}
+        env["errors"]["non_existing_pkgs"] = []
+
+        env["succeeded"] = True
 
         # TODO: migrate away from context manager
         with dnf5_base() as base:
@@ -802,8 +845,8 @@ class Analyzer:
             base.setup()
 
             # Load repos
-            # log("  Loading repos...")
-            # base.read_all_repos()
+            #log("  Loading repos...")
+            #base.read_all_repos()
             self._load_repo_cached(base, repo, arch)
 
             # This sometimes fails, so let's try at least N times
@@ -945,55 +988,65 @@ class Analyzer:
         self.data["envs"] = envs
 
     def _return_failed_workload_env_err(self, workload_conf, env_conf, repo, arch):
-        return {
-            "workload_conf_id": workload_conf["id"],
-            "env_conf_id": env_conf["id"],
-            "repo_id": repo["id"],
-            "arch": arch,
-            "pkg_env_ids": [],
-            "pkg_added_ids": [],
-            "pkg_placeholder_ids": [],
-            "pkg_relations": [],
-            "errors": {
-                "non_existing_pkgs": [],
-                "message": """
+        workload = {}
+
+        workload["workload_conf_id"] = workload_conf["id"]
+        workload["env_conf_id"] = env_conf["id"]
+        workload["repo_id"] = repo["id"]
+        workload["arch"] = arch
+
+        workload["pkg_env_ids"] = []
+        workload["pkg_added_ids"] = []
+        workload["pkg_placeholder_ids"] = []
+
+        workload["pkg_relations"] = []
+
+        workload["errors"] = {}
+        workload["errors"]["non_existing_pkgs"] = []
+        workload["succeeded"] = False
+        workload["env_succeeded"] = False
+
+        workload["errors"]["message"] = """
         Failed to analyze this workload because of an error while analyzing the environment.
 
         Please see the associated environment results for a detailed error message.
-        """,
-            },
-            "succeeded": False,
-            "env_succeeded": False,
-        }
+        """
+
+        return workload
+
 
     def _analyze_workload(self, workload_conf, env_conf, repo, arch):
+
+        workload = {}
+
+        workload["workload_conf_id"] = workload_conf["id"]
+        workload["env_conf_id"] = env_conf["id"]
+        workload["repo_id"] = repo["id"]
+        workload["arch"] = arch
+
+        workload["pkg_env_ids"] = []
+        workload["pkg_added_ids"] = []
+        workload["pkg_placeholder_ids"] = []
+        workload["srpm_placeholder_names"] = []
+
+        workload["pkg_relations"] = []
+
+        workload["errors"] = {}
+        workload["errors"]["non_existing_pkgs"] = []
+        workload["errors"]["non_existing_placeholder_deps"] = []
+
+        workload["warnings"] = {}
+        workload["warnings"]["non_existing_pkgs"] = []
+        workload["warnings"]["non_existing_placeholder_deps"] = []
+        workload["warnings"]["message"] = None
+
+        workload["succeeded"] = True
+        workload["env_succeeded"] = True
+
+
         # Figure out the workload labels
         # It can only have labels that are in both the workload_conf and the env_conf
-        labels = list(set(workload_conf["labels"]) & set(env_conf["labels"]))
-
-        workload = {
-            "workload_conf_id": workload_conf["id"],
-            "env_conf_id": env_conf["id"],
-            "repo_id": repo["id"],
-            "arch": arch,
-            "pkg_env_ids": [],
-            "pkg_added_ids": [],
-            "pkg_placeholder_ids": [],
-            "srpm_placeholder_names": [],
-            "pkg_relations": [],
-            "errors": {
-                "non_existing_pkgs": [],
-                "non_existing_placeholder_deps": [],
-            },
-            "warnings": {
-                "non_existing_pkgs": [],
-                "non_existing_placeholder_deps": [],
-                "message": None,
-            },
-            "succeeded": True,
-            "env_succeeded": True,
-            "labels": labels,
-        }
+        workload["labels"] = list(set(workload_conf["labels"]) & set(env_conf["labels"]))
 
         with dnf5_base() as base:
             config = base.get_config()
@@ -1026,8 +1079,8 @@ class Analyzer:
             base.setup()
 
             # Load repos
-            # log("  Loading repos...")
-            # base.read_all_repos()
+            #log("  Loading repos...")
+            #base.read_all_repos()
             self._load_repo_cached(base, repo, arch)
 
             # 0 %
@@ -1158,8 +1211,8 @@ class Analyzer:
                 error_message = "\n".join(error_message_list)
                 workload["succeeded"] = False
                 workload["errors"]["message"] = str(error_message)
-                # log("  Failed!  (Error message will be on the workload results page.")
-                # log("")
+                #log("  Failed!  (Error message will be on the workload results page.")
+                #log("")
                 return workload
 
             if workload["warnings"]["non_existing_pkgs"] or workload["warnings"]["non_existing_placeholder_deps"]:
@@ -1170,34 +1223,32 @@ class Analyzer:
                         pkg_string = f"  - {pkg_name}"
                         error_message_list.append(pkg_string)
                 if workload["warnings"]["non_existing_placeholder_deps"]:
-                    error_message_list.append(
-                        "The following dependencies of package placeholders are not available (and were skipped):"
-                    )
-                    error_message_list.extend(
-                        [f"  - {pkg_name}" in workload["warnings"]["non_existing_placeholder_deps"]]
-                    )
-
+                    error_message_list.append("The following dependencies of package placeholders are not available (and were skipped):")
+                    # TODO: use comprehension and `error_message_list.extend([])`
+                    for pkg_name in workload["warnings"]["non_existing_placeholder_deps"]:
+                        pkg_string = f"  - {pkg_name}"
+                        error_message_list.append(pkg_string)
                 error_message = "\n".join(error_message_list)
                 workload["warnings"]["message"] = str(error_message)
 
             # 37 %
 
             # Resolve dependencies
-            # log("  Resolving dependencies...")
+            #log("  Resolving dependencies...")
             try:
                 # DNF5: resolve via goal
                 transaction = goal.resolve()
             except DepsolveError as err:
                 workload["succeeded"] = False
                 workload["errors"]["message"] = str(err)
-                # log("  Failed!  (Error message will be on the workload results page.")
-                # log("")
+                #log("  Failed!  (Error message will be on the workload results page.")
+                #log("")
                 return workload
 
             # 43 %
 
             # DNF Query
-            # log("  Creating a DNF Query object...")
+            #log("  Creating a DNF Query object...")
             # Get installed packages from the system repo
             query_env = PackageQuery(base)
             query_env.filter_installed()
@@ -1217,18 +1268,23 @@ class Analyzer:
             query_all.filter_name([p.get_name() for p in pkgs_all])
 
             # OK all good so save stuff now
-            workload["pkg_env_ids"].extend(f"{pkg.get_name()}-{pkg.get_evr()}.{pkg.get_arch()}" for pkg in pkgs_env)
+            # TODO: use comprehensions & .extend
+            for pkg in pkgs_env:
+                pkg_id = f"{pkg.get_name()}-{pkg.get_evr()}.{pkg.get_arch()}"
+                workload["pkg_env_ids"].append(pkg_id)
 
-            workload["pkg_added_ids"].extend(f"{pkg.get_name()}-{pkg.get_evr()}.{pkg.get_arch()}" for pkg in pkgs_added)
+            for pkg in pkgs_added:
+                pkg_id = f"{pkg.get_name()}-{pkg.get_evr()}.{pkg.get_arch()}"
+                workload["pkg_added_ids"].append(pkg_id)
 
             # No errors so far? That means the analysis has succeeded,
             # so placeholders can be added to the list as well.
             # (Failed workloads need to have empty results, that's why)
-            workload["pkg_placeholder_ids"].extend(
-                pkg_placeholder_name_to_id(placeholder_name) for placeholder_name in package_placeholders
-            )
+            for placeholder_name in package_placeholders:
+                workload["pkg_placeholder_ids"].append(pkg_placeholder_name_to_id(placeholder_name))
 
-            workload["srpm_placeholder_names"].extend(srpm_placeholders)
+            for srpm_placeholder_name in srpm_placeholders:
+                workload["srpm_placeholder_names"].append(srpm_placeholder_name)
 
             # 43 %
 
@@ -1286,11 +1342,7 @@ class Analyzer:
             log("")
 
             queue_result = multiprocessing.Queue()
-            process = multiprocessing.Process(
-                target=self._analyze_workload_process,
-                args=(queue_result, workload_conf, env_conf, repo, arch),
-                daemon=True,
-            )
+            process = multiprocessing.Process(target=self._analyze_workload_process, args=(queue_result, workload_conf, env_conf, repo, arch), daemon=True)
             process.start()
 
             # Now wait a bit for the result.
@@ -1371,7 +1423,12 @@ class Analyzer:
         if arch not in self.workload_queue[repo_id]:
             self.workload_queue[repo_id][arch] = []
 
-        workload_task = {"workload_conf": workload_conf, "env_conf": env_conf, "repo": repo, "arch": arch}
+        workload_task = {
+            "workload_conf": workload_conf,
+            "env_conf" : env_conf,
+            "repo" : repo,
+            "arch" : arch
+        }
 
         self.workload_queue[repo_id][arch].append(workload_task)
         self.workload_queue_counter_total += 1
@@ -1440,9 +1497,7 @@ class Analyzer:
 
                         else:
                             workload_id = f"{workload_conf_id}:{env_conf_id}:{repo_id}:{arch}"
-                            self.data["workloads"][workload_id] = self._return_failed_workload_env_err(
-                                workload_conf, env_conf, repo, arch
-                            )
+                            self.data["workloads"][workload_id] = self._return_failed_workload_env_err(workload_conf, env_conf, repo, arch)
 
         asyncio.run(self._analyze_workloads_async(self.data["workloads"]))
 
@@ -1495,8 +1550,15 @@ class Analyzer:
             "env": pkg["in_workload_ids_env"],
         })
 
+        # FIXME: USe comprehension & extend instead on for loop
         # Level 1 and higher is buildroot
-        pkg["level"].extend([{"all": set(), "req": set(), "dep": set(), "env": set()} for _ in range(level)])
+        for _ in range(level):
+            pkg["level"].append({
+                "all": set(),
+                "req": set(),
+                "dep": set(),
+                "env": set()
+            })
 
         pkg["required_by"] = set()
         pkg["recommended_by"] = set()
@@ -1509,41 +1571,46 @@ class Analyzer:
 
         srpm_id = pkg["sourcerpm"].rsplit(".src.rpm")[0]
 
-        srpm = {
-            "id": srpm_id,
-            "name": pkg["source_name"],
-            "reponame": pkg["reponame"],
-            "pkg_ids": set(),
-            "placeholder": False,
-            "placeholder_directly_required_pkg_names": [],
-            "in_workload_ids_all": set(),
-            "in_workload_ids_req": set(),
-            "in_workload_ids_dep": set(),
-            "in_workload_ids_env": set(),
-            "in_buildroot_of_srpm_id_all": set(),
-            "in_buildroot_of_srpm_id_req": set(),
-            "in_buildroot_of_srpm_id_dep": set(),
-            "in_buildroot_of_srpm_id_env": set(),
-            "unwanted_completely_in_list_ids": set(),
-            "unwanted_buildroot_in_list_ids": set(),
-            "level": [],
-        }
+        srpm = {}
+        srpm["id"] = srpm_id
+        srpm["name"] = pkg["source_name"]
+        srpm["reponame"] = pkg["reponame"]
+        srpm["pkg_ids"] = set()
 
-        # Level 0 stores references (not copies) to top-level workload sets.
-        # This keeps level[0] automatically synchronized during processing.
-        # When serialized to JSON, the references become duplicate arrays.
-        srpm["level"].append(
-            {
-                "all": srpm["in_workload_ids_all"],
-                "req": srpm["in_workload_ids_req"],
-                "dep": srpm["in_workload_ids_dep"],
-                "env": srpm["in_workload_ids_env"],
-            }
-        )
+        srpm["placeholder"] = False
+        srpm["placeholder_directly_required_pkg_names"] = []
 
-        # Level 1+ are buildroot dependencies. Each level gets independent sets
-        # (not references) since they track different SRPM IDs at each build level.
-        srpm["level"].extend([{"all": set(), "req": set(), "dep": set(), "env": set()} for _ in range(level)])
+        srpm["in_workload_ids_all"] = set()
+        srpm["in_workload_ids_req"] = set()
+        srpm["in_workload_ids_dep"] = set()
+        srpm["in_workload_ids_env"] = set()
+
+        srpm["in_buildroot_of_srpm_id_all"] = set()
+        srpm["in_buildroot_of_srpm_id_req"] = set()
+        srpm["in_buildroot_of_srpm_id_dep"] = set()
+        srpm["in_buildroot_of_srpm_id_env"] = set()
+
+        srpm["unwanted_completely_in_list_ids"] = set()
+        srpm["unwanted_buildroot_in_list_ids"] = set()
+
+        srpm["level"] = []
+
+        # Level 0 is runtime
+        srpm["level"].append({
+            "all": srpm["in_workload_ids_all"],
+            "req": srpm["in_workload_ids_req"],
+            "dep": srpm["in_workload_ids_dep"],
+            "env": srpm["in_workload_ids_env"],
+        })
+
+        # Level 1 and higher is buildroot
+        for _ in range(level):
+            srpm["level"].append({
+                "all": set(),
+                "req": set(),
+                "dep": set(),
+                "env": set()
+            })
 
         return srpm
 
@@ -1557,22 +1624,28 @@ class Analyzer:
         repo_id = view_conf["repository"]
 
         # Setting up the data buckets for this view
-        view = {
-            "id": view_id,
-            "view_conf_id": view_conf_id,
-            "arch": arch,
-            "workload_ids": [],
-            "pkgs": {},
-            "source_pkgs": {},
-        }
+        view = {}
 
-        # Workloads - filter by repo, arch, and label intersection
-        view_labels = set(view_conf["labels"])
-        view["workload_ids"] = [
-            workload_id
-            for workload_id, workload in self.data["workloads"].items()
-            if workload["repo_id"] == repo_id and workload["arch"] == arch and set(workload["labels"]) & view_labels
-        ]
+        view["id"] = view_id
+        view["view_conf_id"] = view_conf_id
+        view["arch"] = arch
+
+        view["workload_ids"] = []
+        view["pkgs"] = {}
+        view["source_pkgs"] = {}
+
+        # Workloads
+        for workload_id, workload in self.data["workloads"].items():
+            if workload["repo_id"] != repo_id:
+                continue
+
+            if workload["arch"] != arch:
+                continue
+
+            if not set(workload["labels"]) & set(view_conf["labels"]):
+                continue
+
+            view["workload_ids"].append(workload_id)
 
         log(f"  Includes {len(view['workload_ids'])} workloads.")
 
@@ -1653,17 +1726,13 @@ class Analyzer:
                 # Initialise
                 if srpm_id not in view["source_pkgs"]:
                     sourcerpm = f"{srpm_id}.src.rpm"
-                    view["source_pkgs"][srpm_id] = self._init_view_srpm(
-                        {"sourcerpm": sourcerpm, "source_name": srpm_name, "reponame": None}
-                    )
+                    view["source_pkgs"][srpm_id] = self._init_view_srpm({"sourcerpm": sourcerpm, "source_name": srpm_name, "reponame": None})
 
                 # It's a placeholder
                 view["source_pkgs"][srpm_id]["placeholder"] = True
 
                 # Build requires
-                view["source_pkgs"][srpm_id]["placeholder_directly_required_pkg_names"] = workload_conf[
-                    "package_placeholders"
-                ]["srpms"][srpm_name]["buildrequires"]
+                view["source_pkgs"][srpm_id]["placeholder_directly_required_pkg_names"] = workload_conf["package_placeholders"]["srpms"][srpm_name]["buildrequires"]
 
         # If this is an addon view, remove all packages that are already in the parent view
         if view_conf["type"] == "addon":
@@ -1874,7 +1943,10 @@ class Analyzer:
 
         with ProcessPoolExecutor(max_workers=max_workers) as executor:
             # Submit all jobs
-            future_to_item = {executor.submit(process_single_srpm_root_log, item): item for item in work_items}
+            future_to_item = {
+                executor.submit(process_single_srpm_root_log, item): item
+                for item in work_items
+            }
 
             # Collect results as they complete
             completed_count = 0
@@ -1945,22 +2017,17 @@ class Analyzer:
 
                 # Using the _analyze_env function!
                 # So I need to reconstruct a fake env_conf
+                fake_env_conf = {}
+                fake_env_conf["id"] = generated_id
+                fake_env_conf["options"] = []
                 if self.configs["repos"][repo_id]["source"]["base_buildroot_override"]:
-                    packages = self.configs["repos"][repo_id]["source"]["base_buildroot_override"]
-                    groups = []
+                    fake_env_conf["packages"] = self.configs["repos"][repo_id]["source"]["base_buildroot_override"]
+                    fake_env_conf["groups"] = []
                 else:
-                    packages = []
-                    groups = ["build"]
-
-                fake_env_conf = {
-                    "id": generated_id,
-                    "options": [],
-                    "packages": packages,
-                    "groups": groups,
-                    "arch_packages": {
-                        arch: [],
-                    },
-                }
+                    fake_env_conf["packages"] = []
+                    fake_env_conf["groups"] = ["build"]
+                fake_env_conf["arch_packages"] = {}
+                fake_env_conf["arch_packages"][arch] = []
 
                 log(f"Resolving build group: {repo_id} {arch}")
                 repo = self.configs["repos"][repo_id]
@@ -2073,29 +2140,24 @@ class Analyzer:
 
                     # Using the _analyze_workload function!
                     # So I need to reconstruct a fake workload_conf and a fake env_conf
-                    fake_workload_conf = {
-                        "labels": [],
-                        "id": srpm_id,
-                        "options": [],
-                        "packages": srpm["directly_required_pkg_names"],
-                        "groups": [],
-                        "package_placeholders": {
-                            "pkgs": {},
-                            "srpms": {},
-                        },
-                        "arch_packages": {
-                            arch: [],
-                        },
-                    }
+                    fake_workload_conf = {}
+                    fake_workload_conf["labels"] = []
+                    fake_workload_conf["id"] = srpm_id
+                    fake_workload_conf["options"] = []
+                    fake_workload_conf["packages"] = srpm["directly_required_pkg_names"]
+                    fake_workload_conf["groups"] = []
+                    fake_workload_conf["package_placeholders"] = {}
+                    fake_workload_conf["package_placeholders"]["pkgs"] = {}
+                    fake_workload_conf["package_placeholders"]["srpms"] = {}
+                    fake_workload_conf["arch_packages"] = {}
+                    fake_workload_conf["arch_packages"][arch] = []
 
-                    fake_env_conf = {
-                        "labels": [],
-                        "id": self.data["buildroot"]["build_groups"][repo_id][arch]["generated_id"],
-                        "packages": ["bash"],  # This just needs to pass the "if len(packages)" test as True
-                        "arch_packages": {
-                            arch: [],
-                        },
-                    }
+                    fake_env_conf = {}
+                    fake_env_conf["labels"] = []
+                    fake_env_conf["id"] = self.data["buildroot"]["build_groups"][repo_id][arch]["generated_id"]
+                    fake_env_conf["packages"] = ["bash"] # This just needs to pass the "if len(packages)" test as True
+                    fake_env_conf["arch_packages"] = {}
+                    fake_env_conf["arch_packages"][arch] = []
 
                     srpms_to_resolve_counter += 1
 
@@ -2215,10 +2277,14 @@ class Analyzer:
     def _add_missing_levels_to_pkg_or_srpm(self, pkg_or_srpm, level):
         """Add missing level entries to reach the target level."""
         pkg_current_max_level = len(pkg_or_srpm["level"]) - 1
-        missing_levels = level - pkg_current_max_level
-        pkg_or_srpm["level"].extend(
-            [{"all": set(), "req": set(), "dep": set(), "env": set()} for _ in range(missing_levels)]
-        )
+        for _ in range(level - pkg_current_max_level):
+            pkg_or_srpm["level"].append({
+                "all": set(),
+                "req": set(),
+                "dep": set(),
+                "env": set()
+            })
+
 
     def _add_buildroot_to_view(self, view_conf, arch):
 
@@ -3139,11 +3205,8 @@ class Analyzer:
                             # ... and if they're in the previous group, assign their maintainer(s)
                             for superior_pkg_maintainer, superior_pkg_maintainer_scores in superior_pkg["maintainer_recommendation"].items():
                                 if prev_score in superior_pkg_maintainer_scores:
-                                    sublevel_change_detection_tuple = (
-                                        superior_pkg_name,
-                                        pkg_name,
-                                        superior_pkg_maintainer,
-                                    )
+
+                                    sublevel_change_detection_tuple = (superior_pkg_name, pkg_name, superior_pkg_maintainer)
                                     if sublevel_change_detection_tuple in sublevel_change_detection:
                                         continue
                                     else:

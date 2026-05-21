@@ -169,11 +169,10 @@ def _generate_env_json_files(query):
         data_name = f"env-conf--{query.url_slug_id(env_conf_id)}"
 
         # What to save
-        output_data = {
-            "id": env_conf_id,
-            "type": "env_conf",
-            "data": query.configs["envs"][env_conf_id],
-        }
+        output_data = {}
+        output_data["id"] = env_conf_id
+        output_data["type"] = "env_conf"
+        output_data["data"] = query.configs["envs"][env_conf_id]
 
         # And save it
         _generate_json_file(output_data, data_name, query.settings)
@@ -182,6 +181,7 @@ def _generate_env_json_files(query):
         # === Results
 
         for env_id in query.envs(env_conf_id, None, None, list_all=True):
+            env = query.data["envs"][env_id]
 
             log(f"  Results: {env_id}")
 
@@ -189,12 +189,11 @@ def _generate_env_json_files(query):
             data_name = f"env--{query.url_slug_id(env_id)}"
 
             # What to save
-            output_data = {
-                "id": env_id,
-                "type": "env",
-                "data": query.data["envs"][env_id],
-                "pkg_query": query.env_pkgs_id(env_id),
-            }
+            output_data = {}
+            output_data["id"] = env_id
+            output_data["type"] = "env"
+            output_data["data"] = query.data["envs"][env_id]
+            output_data["pkg_query"] = query.env_pkgs_id(env_id)
 
             # And save it
             _generate_json_file(output_data, data_name, query.settings)
@@ -221,11 +220,10 @@ def _generate_workload_json_files(query):
         data_name = f"workload-conf--{query.url_slug_id(workload_conf_id)}"
 
         # What to save
-        output_data = {
-            "id": workload_conf_id,
-            "type": "workload_conf",
-            "data": query.configs["workloads"][workload_conf_id],
-        }
+        output_data = {}
+        output_data["id"] = workload_conf_id
+        output_data["type"] = "workload_conf"
+        output_data["data"] = query.configs["workloads"][workload_conf_id]
 
         # And save it
         _generate_json_file(output_data, data_name, query.settings)
@@ -242,12 +240,11 @@ def _generate_workload_json_files(query):
             data_name = f"workload--{query.url_slug_id(workload_id)}"
 
             # What to save
-            output_data = {
-                "id": workload_id,
-                "type": "workload",
-                "data": query.data["workloads"][workload_id],
-                "pkg_query": query.workload_pkgs_id(workload_id)
-            }
+            output_data = {}
+            output_data["id"] = workload_id
+            output_data["type"] = "workload"
+            output_data["data"] = query.data["workloads"][workload_id]
+            output_data["pkg_query"] = query.workload_pkgs_id(workload_id)
 
             # And save it
             _generate_json_file(output_data, data_name, query.settings)
@@ -272,10 +269,9 @@ def _generate_view_json_files(query):
         log(f"  {data_name}")
 
         # What to save
-        output_data = {
-            "id": view_conf_id,
-            "pkgs": {}
-        }
+        output_data = {}
+        output_data["id"] = view_conf_id
+        output_data["pkgs"] = {}
 
         keys_to_save = [
             "name",
@@ -325,9 +321,10 @@ def _generate_view_json_files(query):
         ]
 
         for srpm_name, srpm in view_all_arches["source_pkgs_by_name"].items():
-            output_data["srpms"][srpm_name] = {
-                key: srpm[key] for key in keys_to_save
-            }
+            output_data["srpms"][srpm_name] = {}
+
+            for key in keys_to_save:
+                output_data["srpms"][srpm_name][key] = srpm[key]
 
         # And save it
         _generate_json_file(output_data, data_name, query.settings)
@@ -342,10 +339,9 @@ def _generate_view_json_files(query):
         log(f"  {data_name}")
 
         # What to save
-        output_data = {
-            "id": view_conf_id,
-            "workloads": view_all_arches["workloads"]
-        }
+        output_data = {}
+        output_data["id"] = view_conf_id
+        output_data["workloads"] = view_all_arches["workloads"]
 
 
         # And save it

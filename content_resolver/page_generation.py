@@ -24,13 +24,9 @@ def _generate_html_page(template_name, template_data, page_name, settings):
 
     page = template.render(**template_data)
 
-    filename = ("{page_name}.html".format(
-        page_name=page_name.replace(":", "--")
-    ))
+    filename = (f"{page_name.replace(":", "--")}.html")
 
-    log("  Writing file...  ({filename})".format(
-        filename=filename
-    ))
+    log(f"  Writing file...  ({filename})")
     with open(os.path.join(output, filename), "w") as file:
         file.write(page)
     
