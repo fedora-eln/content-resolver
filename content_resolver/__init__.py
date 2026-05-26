@@ -4,8 +4,9 @@
 # https://docs.python.org/3/whatsnew/3.14.html#concurrent-futures
 
 import multiprocessing
+
 try:
-    multiprocessing.set_start_method('fork')
-except RuntimeError as err:
+    multiprocessing.set_start_method("fork")
+except RuntimeError:
     # Already set, ignore
     pass

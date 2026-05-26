@@ -8,17 +8,14 @@ from content_resolver.utils import dump_data, err_log, log
 
 def _save_current_historic_data(query):
     # This is the historic data for charts
-    # Package lists are above 
+    # Package lists are above
 
     log("Generating current historic data...")
 
     # Where to save it
     year = datetime.datetime.now().strftime("%Y")
     week = datetime.datetime.now().strftime("%W")
-    filename = "historic_data-{year}-week_{week}.json".format(
-        year=year,
-        week=week
-    )
+    filename = f"historic_data-{year}-week_{week}.json"
     output_dir = os.path.join(query.settings["output"], "history")
     os.makedirs(output_dir, exist_ok=True)
     file_path = os.path.join(output_dir, filename)
@@ -43,7 +40,7 @@ def _save_current_historic_data(query):
         workload_history["pkg_count"] = len(query.workload_pkgs_id(workload_id))
 
         history_data["workloads"][workload_id] = workload_history
-    
+
     # Environments
     for env_id in query.envs(None,None,None,list_all=True):
         env = query.data["envs"][env_id]
@@ -65,9 +62,9 @@ def _save_current_historic_data(query):
 
             repo_history = {}
             repo_history["pkg_count"] = len(pkgs)
-            
+
             history_data["repos"][repo_id][arch] = repo_history
-    
+
     # Views (new)
     for view_conf_id, view_conf in query.configs["views"].items():
         view_all_arches = query.data["views_all_arches"][view_conf_id]
@@ -84,9 +81,7 @@ def _save_current_historic_data(query):
             history_data["views"][view_conf_id]["srpm_count_build_level_2_plus"] = view_all_arches["numbers"]["srpms"]["build_level_2_plus"]
 
     # And save it
-    log("  Saving in: {file_path}".format(
-        file_path=file_path
-    ))
+    log(f"  Saving in: {file_path}")
     dump_data(file_path, history_data)
 
     log("  Done!")
@@ -114,25 +109,17 @@ def _read_historic_data(query):
             try:
                 document = json.load(file)
 
-                date = datetime.datetime.strptime(document["date"],"%Y-%m-%d")
+                date = datetime.datetime.strptime(document["date"], "%Y-%m-%d")
                 year = date.strftime("%Y")
                 week = date.strftime("%W")
-                key = "{year}-week_{week}".format(
-                    year=year,
-                    week=week
-                )
+                key = f"{year}-week_{week}"
             except (KeyError, ValueError):
-                err_log("Invalid file in historic data: {filename}. Ignoring.".format(
-                    filename=filename
-                ))
+                err_log(f"Invalid file in historic data: {filename}. Ignoring.")
                 continue
 
             historic_data[key] = document
 
     return historic_data
-
-    log("  Done!")
-    log("")
 
 
 def _generate_chartjs_data(historic_data, query):
@@ -172,11 +159,9 @@ def _generate_chartjs_data(historic_data, query):
 
         entry_data["datasets"].append(dataset)
 
-        entry_name = "chartjs-data--workload--{workload_id}".format(
-            workload_id=workload_id
-        )
+        entry_name = f"chartjs-data--workload--{workload_id}"
         _generate_json_file(entry_data, entry_name, query.settings)
-    
+
     # Data for workload overview pages
     for workload_conf_id in query.workloads(None,None,None,None,output_change="workload_conf_ids"):
         for repo_id in query.workloads(workload_conf_id,None,None,None,output_change="repo_ids"):
@@ -219,12 +204,9 @@ def _generate_chartjs_data(historic_data, query):
 
                 entry_data["datasets"].append(dataset)
 
-            entry_name = "chartjs-data--workload-overview--{workload_conf_id}--{repo_id}".format(
-                workload_conf_id=workload_conf_id,
-                repo_id=repo_id
-            )
+            entry_name = f"chartjs-data--workload-overview--{workload_conf_id}--{repo_id}"
             _generate_json_file(entry_data, entry_name, query.settings)
-    
+
     # Data for workload cmp arches pages
     for workload_conf_id in query.workloads(None,None,None,None,output_change="workload_conf_ids"):
         for env_conf_id in query.workloads(workload_conf_id,None,None,None,output_change="env_conf_ids"):
@@ -270,13 +252,9 @@ def _generate_chartjs_data(historic_data, query):
 
                     entry_data["datasets"].append(dataset)
 
-                entry_name = "chartjs-data--workload-cmp-arches--{workload_conf_id}--{env_conf_id}--{repo_id}".format(
-                    workload_conf_id=workload_conf_id,
-                    env_conf_id=env_conf_id,
-                    repo_id=repo_id
-                )
+                entry_name = f"chartjs-data--workload-cmp-arches--{workload_conf_id}--{env_conf_id}--{repo_id}"
                 _generate_json_file(entry_data, entry_name, query.settings)
-    
+
     # Data for workload cmp envs pages
     for workload_conf_id in query.workloads(None,None,None,None,output_change="workload_conf_ids"):
         for repo_id in query.workloads(workload_conf_id,None,None,None,output_change="repo_ids"):
@@ -322,13 +300,9 @@ def _generate_chartjs_data(historic_data, query):
 
                     entry_data["datasets"].append(dataset)
 
-                entry_name = "chartjs-data--workload-cmp-envs--{workload_conf_id}--{repo_id}--{arch}".format(
-                    workload_conf_id=workload_conf_id,
-                    repo_id=repo_id,
-                    arch=arch
-                )
+                entry_name = f"chartjs-data--workload-cmp-envs--{workload_conf_id}--{repo_id}--{arch}"
                 _generate_json_file(entry_data, entry_name, query.settings)
-    
+
     # Data for env pages
     for env_id in query.envs(None, None, None, list_all=True):
 
@@ -365,11 +339,9 @@ def _generate_chartjs_data(historic_data, query):
 
         entry_data["datasets"].append(dataset)
 
-        entry_name = "chartjs-data--env--{env_id}".format(
-            env_id=env_id
-        )
+        entry_name = f"chartjs-data--env--{env_id}"
         _generate_json_file(entry_data, entry_name, query.settings)
-    
+
     # Data for env overview pages
     for env_conf_id in query.envs(None,None,None,output_change="env_conf_ids"):
         for repo_id in query.envs(env_conf_id,None,None,output_change="repo_ids"):
@@ -412,12 +384,9 @@ def _generate_chartjs_data(historic_data, query):
 
                 entry_data["datasets"].append(dataset)
 
-            entry_name = "chartjs-data--env-overview--{env_conf_id}--{repo_id}".format(
-                env_conf_id=env_conf_id,
-                repo_id=repo_id
-            )
+            entry_name = f"chartjs-data--env-overview--{env_conf_id}--{repo_id}"
             _generate_json_file(entry_data, entry_name, query.settings)
-    
+
     # Data for env cmp arches pages
     for env_conf_id in query.envs(None,None,None,output_change="env_conf_ids"):
         for repo_id in query.envs(env_conf_id,None,None,output_change="repo_ids"):
@@ -465,8 +434,8 @@ def _generate_chartjs_data(historic_data, query):
                 repo_id=repo_id
             )
             _generate_json_file(entry_data, entry_name, query.settings)
-    
-    # Data for view pages 
+
+    # Data for view pages
     for view_conf_id in query.configs["views"].keys():
         view_all_arches = query.data["views_all_arches"][view_conf_id]
 
@@ -482,21 +451,9 @@ def _generate_chartjs_data(historic_data, query):
         # Second, get the actual data for everything that's needed
         entry_data["datasets"] = []
 
+        dataset_names = ["env", "req", "dep"]
         if view_all_arches["has_buildroot"]:
-            dataset_names = [
-                "env",
-                "req",
-                "dep",
-                "build_base",
-                "build_level_1",
-                "build_level_2_plus"
-            ]
-        else:
-            dataset_names = [
-                "env",
-                "req",
-                "dep"
-            ]
+            dataset_names.extend(["build_base", "build_level_1", "build_level_2_plus"])
 
         dataset_metadata = {
             "env": {
@@ -539,11 +496,8 @@ def _generate_chartjs_data(historic_data, query):
                     srpm_count = entry["views"][view_conf_id][dataset_key]
 
                     # It's a stack chart, so I need to show the numbers on top of each other
-                    if dataset_name == "env":
-                        srpm_count_compound = srpm_count
-                    else:
-                        srpm_count_compound = entry_data["datasets"][-1]["data"][loop_index] + srpm_count
-
+                    srpm_count_compound = srpm_count if dataset_name == "env" else \
+                        entry_data["datasets"][-1]["data"][loop_index] + srpm_count
                     dataset["data"].append(srpm_count_compound)
                 except (KeyError, IndexError):
                     dataset["data"].append("null")

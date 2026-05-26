@@ -36,23 +36,23 @@ def _generate_view_lists(query):
         # all      RPM    NEVRAs      view-all-binary-package-list
         # all      RPM    NEVRs       view-all-binary-package-nevr-list
         # all      RPM    Names       view-all-binary-package-name-list
-        # 
+        #
         # all      SRPM   NEVRs       view-all-source-package-list
         # all      SRPM   Names       view-all-source-package-name-list
-        # 
-        # 
+        #
+        #
         # runtime  RPM    NEVRAs      view-binary-package-list
         # runtime  RPM    NEVRs       view-binary-package-nevr-list
         # runtime  RPM    Names       view-binary-package-name-list
-        # 
+        #
         # runtime  SRPM   NEVRs       view-source-package-list
         # runtime  SRPM   Names       view-source-package-name-list
-        # 
-        # 
+        #
+        #
         # build    RPM    NEVRAs      view-buildroot-package-list
         # build    RPM    NEVRs       view-buildroot-package-nevr-list
         # build    RPM    Names       view-buildroot-package-name-list
-        # 
+        #
         # build    SRPM   NEVRs       view-buildroot-package-nevr-list
         # build    SRPM   Names       view-buildroot-source-package-name-list
 
@@ -61,47 +61,46 @@ def _generate_view_lists(query):
 
         for arch in view_conf["architectures"]:
 
-            lists = {}
-
             view_id = f"{view_conf_id}:{arch}"
-
             view = query.data["views"][view_id]
 
-            # all      RPM    NEVRAs      view-all-binary-package-list
-            # all      RPM    NEVRs       view-all-binary-package-nevr-list
-            # all      RPM    Names       view-all-binary-package-name-list
-            lists["view-all-binary-package-list"] = set()
-            lists["view-all-binary-package-nevr-list"] = set()
-            lists["view-all-binary-package-name-list"] = set()
+            lists = {
+                # all      RPM    NEVRAs      view-all-binary-package-list
+                # all      RPM    NEVRs       view-all-binary-package-nevr-list
+                # all      RPM    Names       view-all-binary-package-name-list
+                "view-all-binary-package-list": set(),
+                "view-all-binary-package-nevr-list": set(),
+                "view-all-binary-package-name-list": set(),
 
-            # all      SRPM   NEVRs       view-all-source-package-list
-            # all      SRPM   Names       view-all-source-package-name-list
-            lists["view-all-source-package-list"] = set()
-            lists["view-all-source-package-name-list"] = set()
+                # all      SRPM   NEVRs       view-all-source-package-list
+                # all      SRPM   Names       view-all-source-package-name-list
+                "view-all-source-package-list": set(),
+                "view-all-source-package-name-list": set(),
 
-            # runtime  RPM    NEVRAs      view-binary-package-list
-            # runtime  RPM    NEVRs       view-binary-package-nevr-list
-            # runtime  RPM    Names       view-binary-package-name-list
-            lists["view-binary-package-list"] = set()
-            lists["view-binary-package-nevr-list"] = set()
-            lists["view-binary-package-name-list"] = set()
+                # runtime  RPM    NEVRAs      view-binary-package-list
+                # runtime  RPM    NEVRs       view-binary-package-nevr-list
+                # runtime  RPM    Names       view-binary-package-name-list
+                "view-binary-package-list": set(),
+                "view-binary-package-nevr-list": set(),
+                "view-binary-package-name-list": set(),
 
-            # runtime  SRPM   NEVRs       view-source-package-list
-            # runtime  SRPM   Names       view-source-package-name-list
-            lists["view-source-package-list"] = set()
-            lists["view-source-package-name-list"] = set()
+                # runtime  SRPM   NEVRs       view-source-package-list
+                # runtime  SRPM   Names       view-source-package-name-list
+                "view-source-package-list": set(),
+                "view-source-package-name-list": set(),
 
-            # build    RPM    NEVRAs      view-buildroot-package-list
-            # build    RPM    NEVRs       view-buildroot-package-nevr-list
-            # build    RPM    Names       view-buildroot-package-name-list
-            lists["view-buildroot-package-list"] = set()
-            lists["view-buildroot-package-nevr-list"] = set()
-            lists["view-buildroot-package-name-list"] = set()
+                # build    RPM    NEVRAs      view-buildroot-package-list
+                # build    RPM    NEVRs       view-buildroot-package-nevr-list
+                # build    RPM    Names       view-buildroot-package-name-list
+                "view-buildroot-package-list": set(),
+                "view-buildroot-package-nevr-list": set(),
+                "view-buildroot-package-name-list": set(),
 
-            # build    SRPM   NEVRs       view-buildroot-source-package-list
-            # build    SRPM   Names       view-buildroot-source-package-name-list
-            lists["view-buildroot-source-package-list"] = set()
-            lists["view-buildroot-source-package-name-list"] = set()
+                # build    SRPM   NEVRs       view-buildroot-source-package-list
+                # build    SRPM   Names       view-buildroot-source-package-name-list
+                "view-buildroot-source-package-list": set(),
+                "view-buildroot-source-package-name-list": set(),
+            }
 
             for pkg_id, pkg in view["pkgs"].items():
                 lists["view-all-binary-package-list"].add(pkg_id)
@@ -128,8 +127,8 @@ def _generate_view_lists(query):
 
                     lists["view-buildroot-source-package-list"].add(srpm_id)
                     lists["view-buildroot-source-package-name-list"].add(pkg["source_name"])
-            
-            
+
+
             for list_name, list_content in lists.items():
 
                 # Generate the arch-specific lists
@@ -140,14 +139,14 @@ def _generate_view_lists(query):
                 if list_name not in all_arches_lists:
                     all_arches_lists[list_name] = set()
                 all_arches_lists[list_name].update(list_content)
-        
-        
+
+
         for list_name, list_content in all_arches_lists.items():
 
             # Generate the all-arch lists
             file_name = f"{list_name}--{view_conf_id}"
             _generate_txt_file(sorted(list(list_content)), file_name, query.settings)
-    
+
     log("Done!")
     log("")
 
@@ -155,7 +154,7 @@ def _generate_view_lists(query):
 def _generate_env_json_files(query):
 
     log("Generating JSON files for environments...")
-    
+
     # == envs
     log("")
     log("Envs:")
@@ -375,10 +374,10 @@ def generate_data_files(query):
     # Generate the package lists for views
     _generate_view_lists(query)
 
-    # Generate the JSON files for envs 
+    # Generate the JSON files for envs
     _generate_env_json_files(query)
 
-    # Generate the JSON files for workloads 
+    # Generate the JSON files for workloads
     _generate_workload_json_files(query)
 
     # Generate the JSON files for views
