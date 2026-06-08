@@ -35,9 +35,6 @@ jobs:
     - name: Clean up
       run: dnf clean all
 
-    - name: Install package in development mode
-      run: pip install -e .
-
     - name: Create output dir
       run: mkdir -p output/history
 
