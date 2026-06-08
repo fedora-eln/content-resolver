@@ -12,7 +12,9 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 
 import koji
 from libdnf5.base import Goal, GoalJobSettings
+from libdnf5.exception import BaseTransactionError
 from libdnf5.exception import Error as DnfErr
+from libdnf5.exception import RepoDownloadError as Dnf5RepoDownloadError
 from libdnf5.exception import UserAssertionError
 from libdnf5.repo import RepoQuery
 from libdnf5.rpm import PackageQuery
@@ -999,9 +1001,10 @@ class Analyzer:
                     repo_sack.load_repos()
                     success = True
                     break
-                except (UserAssertionError, DnfErr, RuntimeError) as e:
+                except (UserAssertionError, DnfErr, RuntimeError) as err:
                     attempts += 1
-                    log("  Failed to download repodata. Trying again!", e)
+                    error_msg = str(err)
+                    log(f"  Failed to download repodata (attempt {attempts}/{max_tries}). Error: {err}")
 
                     # Try to identify which repo failed and disable it
                     for repo_name in repo_names_to_load:
@@ -1052,7 +1055,7 @@ class Analyzer:
                     # DNF5: add_group_install takes spec and options
                     settings = GoalJobSettings()
                     goal.add_group_install(grp_spec, settings)
-                except MarkingError:
+                except (UserAssertionError, DnfErr):
                     env["errors"]["non_existing_pkgs"].append(grp_spec)
                     continue
 
@@ -1071,7 +1074,7 @@ class Analyzer:
             try:
                 # DNF5: resolve via goal
                 transaction = goal.resolve()
-            except DepsolveError as err:
+            except DnfErr as err:
                 err_log(f"Failed to analyze environment '{env_conf['id']}' from '{repo['id']}' {arch}:")
                 err_log(f"  - {err}")
                 env["succeeded"] = False
@@ -1085,7 +1088,7 @@ class Analyzer:
             try:
                 # DNF5: download packages from transaction
                 transaction.download()
-            except DownloadError as err:
+            except Dnf5RepoDownloadError as err:
                 err_log(f"Failed to analyze environment '{env_conf['id']}' from '{repo['id']}' {arch}:")
                 err_log(f"  - {err}")
                 env["succeeded"] = False
@@ -1096,7 +1099,7 @@ class Analyzer:
             try:
                 # DNF5: run transaction
                 transaction.run()
-            except TransactionCheckError as err:
+            except BaseTransactionError as err:
                 err_log(f"Failed to analyze environment '{env_conf['id']}' from '{repo['id']}' {arch}:")
                 err_log(f"  - {err}")
                 env["succeeded"] = False
@@ -1311,7 +1314,7 @@ class Analyzer:
                         repo_sack.load_repos()
                         success = True
                         break
-                    except RepoError as err:
+                    except (UserAssertionError, DnfErr, RuntimeError, Dnf5RepoDownloadError) as err:
                         attempts += 1
                         error_msg = str(err)
                         # log("  Failed to download repodata. Trying again!")
@@ -1369,7 +1372,7 @@ class Analyzer:
                     # DNF5: add_group_install with settings
                     settings = GoalJobSettings()
                     goal.add_group_install(grp_spec, settings)
-                except MarkingError:
+                except (UserAssertionError, DnfErr):
                     workload["errors"]["non_existing_pkgs"].append(grp_spec)
                     continue
 
@@ -1468,7 +1471,7 @@ class Analyzer:
             try:
                 # DNF5: resolve via goal
                 transaction = goal.resolve()
-            except DepsolveError as err:
+            except DnfErr as err:
                 workload["succeeded"] = False
                 workload["errors"]["message"] = str(err)
                 #log("  Failed!  (Error message will be on the workload results page.")
@@ -1543,9 +1546,36 @@ class Analyzer:
         return workload
 
     def _analyze_workload_process(self, queue_result, workload_conf, env_conf, repo, arch):
+        try:
+            workload = self._analyze_workload(workload_conf, env_conf, repo, arch)
+            queue_result.put(workload)
+        except Exception as e:
+            # Create a failed workload result instead of crashing
+            workload = {}
+            workload["workload_conf_id"] = workload_conf["id"]
+            workload["env_conf_id"] = env_conf["id"]
+            workload["repo_id"] = repo["id"]
+            workload["arch"] = arch
+            workload["pkg_env_ids"] = []
+            workload["pkg_added_ids"] = []
+            workload["pkg_placeholder_ids"] = []
+            workload["srpm_placeholder_names"] = []
+            workload["pkg_relations"] = []
+            workload["errors"] = {}
+            workload["errors"]["non_existing_pkgs"] = []
+            workload["errors"]["non_existing_placeholder_deps"] = []
+            workload["errors"]["message"] = f"Workload analysis failed with exception:\n{type(e).__name__}: {str(e)}\n\nTraceback:\n{traceback.format_exc()}"
+            workload["warnings"] = {}
+            workload["warnings"]["non_existing_pkgs"] = []
+            workload["warnings"]["non_existing_placeholder_deps"] = []
+            workload["warnings"]["message"] = None
+            workload["succeeded"] = False
+            workload["env_succeeded"] = False
+            workload["labels"] = list(set(workload_conf["labels"]) & set(env_conf["labels"]))
+            queue_result.put(workload)
+            # Log error to stderr so it appears in logs
+            err_log(f" ERROR analyzing workload {workload_conf['id']}:{env_conf['id']}:{repo['id']}:{arch}-> {e}", file=sys.stderr)
 
-        workload = self._analyze_workload(workload_conf, env_conf, repo, arch)
-        queue_result.put(workload)
 
     async def _analyze_workloads_subset_async(self, task_queue, results):
 
