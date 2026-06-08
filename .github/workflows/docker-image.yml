@@ -23,15 +23,20 @@ jobs:
       run: |
         dnf -y install \
           git-core \
-          python3-yaml \
+          python3-flake8 \
           python3-jinja2 \
           python3-koji \
+          python3-libdnf5 \
+          python3-pip \
           python3-pytest \
-          python3-flake8 \
-          python3-libdnf5
+          python3-pytest-cov \
+          python3-yaml
 
     - name: Clean up
       run: dnf clean all
+
+    - name: Install package in development mode
+      run: pip install -e .
 
     - name: Create output dir
       run: mkdir -p output/history
