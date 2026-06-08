@@ -381,6 +381,10 @@ class Analyzer:
         self.cache["root_log_deps"]["current"] = {}
         self.cache["root_log_deps"]["next"] = {}
 
+        # Cache for compose metadata (composeinfo.json)
+        # Maps repo_id -> {arch -> [list of available variant names]}
+        self.compose_metadata_cache = {}
+
         self.metrics_data = []
 
         # When analysing buildroot, we don't need metadata about
@@ -402,7 +406,7 @@ class Analyzer:
 
     def print_metrics(self):
         log("Additional metrics:")
-        # TODO: use `numerate(self.metrics_data)` instead of incrementing counter
+        # TODO: use `enumerate(self.metrics_data)` instead of incrementing counter
         counter = 0
 
         for this_record in self.metrics_data:
@@ -422,6 +426,86 @@ class Analyzer:
 
             counter += 1
 
+    def _get_available_compose_variants(self, repo, arch):
+        """
+        Fetch and parse composeinfo.json to determine which variants are available
+        for a given repository and architecture.
+
+        Returns:
+            dict: Mapping of config repo names to boolean availability
+                  e.g., {'BaseOS': True, 'HA': True, 'RS': False, 'Rawhide': True}
+                  Returns empty dict if composeinfo is not available or on error.
+
+        Caches results in self.compose_metadata_cache[repo_id][arch].
+
+        Note: Maps config repo names (like 'HA', 'buildroot') to compose variant names
+        (like 'HighAvailability', 'Buildroot') and marks external fallback repos like
+        'Rawhide' as always available.
+        """
+        repo_id = repo["id"]
+
+        # Check cache first
+        if repo_id not in self.compose_metadata_cache:
+            self.compose_metadata_cache[repo_id] = {}
+
+        if arch in self.compose_metadata_cache[repo_id]:
+            return self.compose_metadata_cache[repo_id][arch]
+
+        # If no composeinfo URL is configured, return empty dict (no filtering)
+        composeinfo_url = repo["source"].get("composeinfo")
+        if not composeinfo_url:
+            self.compose_metadata_cache[repo_id][arch] = {}
+            return {}
+
+        # Mapping of config repo names to compose variant names
+        # This handles cases where the names differ
+        repo_name_mapping = {
+            "HA": "HighAvailability",
+            "buildroot": "Buildroot",
+        }
+
+        # External fallback repos that aren't part of the compose
+        # These should always be marked as available
+        external_repos = {"Rawhide"}
+
+        try:
+            # Fetch composeinfo.json
+            with urllib.request.urlopen(composeinfo_url, timeout=10) as response:
+                compose_data = json.loads(response.read().decode('utf-8'))
+
+            # Extract variants available for this architecture
+            compose_variants = set()
+            variants = compose_data.get("payload", {}).get("variants", {})
+
+            for variant_name, variant_data in variants.items():
+                variant_arches = variant_data.get("arches", [])
+                if arch in variant_arches:
+                    compose_variants.add(variant_name)
+
+            # Build availability map for all config repo names
+            availability = {}
+            for config_name in repo["source"]["repos"].keys():
+                # Check if this is an external fallback repo
+                if config_name in external_repos:
+                    availability[config_name] = True
+                    continue
+
+                # Map config name to compose variant name
+                compose_name = repo_name_mapping.get(config_name, config_name)
+
+                # Check if the variant exists in the compose
+                availability[config_name] = compose_name in compose_variants
+
+            # Cache and return
+            self.compose_metadata_cache[repo_id][arch] = availability
+            return availability
+
+        except Exception as e:
+            # On any error (network, parsing, etc.), log and return empty dict
+            # Empty dict means no filtering - we'll try all repos as before
+            log(f"  Warning: Could not fetch composeinfo from {composeinfo_url}: {e}")
+            self.compose_metadata_cache[repo_id][arch] = {}
+            return {}
 
     def _load_repo_cached(self, base, repo, arch):
         """
@@ -473,10 +557,19 @@ class Analyzer:
         if not exists:
             # log("  Loading repos using DNF...")
 
+            # Get available variants from composeinfo.json (if configured)
+            available_variants = self._get_available_compose_variants(repo, arch)
+
             for repo_name, repo_data in repo["source"]["repos"].items():
                 if repo_data["limit_arches"] and arch not in repo_data["limit_arches"]:
                     # log("  Skipping {} on {}".format(repo_name, arch))
                     continue
+
+                # Check if variant exists in compose (if composeinfo is available)
+                if available_variants and not available_variants.get(repo_name, True):
+                    log(f"  Skipping {repo_name} on {arch} (not in compose)")
+                    continue
+
                 # log("  Including {}".format(repo_name))
 
                 config = base.get_config()
@@ -532,11 +625,21 @@ class Analyzer:
 
             # DNF5: setup() must be called after configuration but before using repo_sack
             base.setup()
+            # Get available variants from composeinfo.json (if configured)
+            available_variants = self._get_available_compose_variants(repo, arch)
 
+            repo_names_to_load = []
             for repo_name, repo_data in repo["source"]["repos"].items():
                 if repo_data["limit_arches"] and arch not in repo_data["limit_arches"]:
                     log(f"  Skipping {repo_name} on {arch}")
                     continue
+
+                # Check if variant exists in compose (if composeinfo is available)
+                if available_variants and not available_variants.get(repo_name, True):
+                    log(f"  Skipping {repo_name} on {arch} (not in compose)")
+                    continue
+
+
                 log(f"  Including {repo_name}")
 
                 repo_sack = base.get_repo_sack()
@@ -544,6 +647,7 @@ class Analyzer:
                 repo_config = new_repo.get_config()
                 repo_config.get_baseurl_option().set([repo_data["baseurl"]])
                 repo_config.get_priority_option().set(repo_data["priority"])
+                repo_names_to_load.append(repo_name)
 
             # Additional repository (if configured)
             # if repo["source"]["additional_repository"]:
@@ -556,9 +660,9 @@ class Analyzer:
             log("  Loading repos...")
             # base.read_all_repos()
 
-            # At this stage, I need to get all packages from the repo listed.
+            # At this stage, we need to get all packages from the repo listed.
             # That also includes modular packages. Modular packages in non-enabled
-            # streams would be normally hidden. So I mark all the available repos as
+            # streams would be normally hidden. So we mark all the available repos as
             # hotfix repos to make all packages visible, including non-enabled streams.
             # DNF5: Iterate repos using RepoQuery
             repo_query = RepoQuery(base)
@@ -569,22 +673,48 @@ class Analyzer:
 
             # This sometimes fails, so let's try at least N times
             # before totally giving up!
-            max_tries = 10
+            # If individual repos fail, disable them and continue with others
+            max_tries = 3
             attempts = 0
             success = False
-            while attempts < max_tries:
+            failed_repos = []
+
+            while attempts < max_tries and not success:
                 try:
                     # DNF5: load repos instead of fill_sack
                     repo_sack.load_repos()
                     success = True
                     break
-                except (UserAssertionError, DNFErr) as err:
+                except (UserAssertionError, DnfErr) as err:
                     attempts += 1
-                    log(f"  Failed to download repodata (attempt {attempts}/{max_tries}). Error: {err}")
+                    error_msg = str(err)
+                    log(f"  Failed to download repodata (attempt {attempts}/{max_tries}). Error: {error_msg}")
+
+                    # Try to identify which repo failed and disable it
+                    for repo_name in repo_names_to_load:
+                        if repo_name in error_msg:
+                            if repo_name not in failed_repos:
+                                log(f"  Disabling problematic repository: {repo_name}")
+                                failed_repos.append(repo_name)
+                                try:
+                                    repo_query = RepoQuery(base)
+                                    for repo_weak_ptr in repo_query:
+                                        repo_obj = repo_weak_ptr.get()
+                                        if repo_obj.get_id() == repo_name:
+                                            repo_obj.disable()
+                                            break
+                                except Exception as disable_err:
+                                    log(f"  Warning: Could not disable repo {repo_name}: {disable_err}")
+                            break
+
             if not success:
-                err = f"Failed to download repodata while analyzing repo '{repo['name']} ({repo['id']}) {arch}"
+                # If we still failed after trying to disable problematic repos, give up
+                err = f"Failed to download repodata while analyzing repo '{repo['name']} ({repo['id']}) {arch}'"
                 err_log(err)
                 raise RepoDownloadError(err)
+
+            if failed_repos:
+                log(f"  WARNING: Proceeding without repositories: {', '.join(failed_repos)}")
 
             # DNF5: Create PackageQuery instead of using base.sack.query
             query = PackageQuery(base)
@@ -849,12 +979,20 @@ class Analyzer:
             #base.read_all_repos()
             self._load_repo_cached(base, repo, arch)
 
+            # Build list of repo names for error handling
+            repo_names_to_load = []
+            for repo_name, repo_data in repo["source"]["repos"].items():
+                if repo_data["limit_arches"] and arch not in repo_data["limit_arches"]:
+                    continue
+                repo_names_to_load.append(repo_name)
+
             # This sometimes fails, so let's try at least N times
             # before totally giving up!
-            MAX_TRIES = 10
+            max_tries = 3
             attempts = 0
             success = False
-            while attempts < MAX_TRIES:
+            failed_repos = []
+            while attempts < max_tries:
                 try:
                     # DNF5: load repos instead of fill_sack
                     repo_sack = base.get_repo_sack()
@@ -865,10 +1003,30 @@ class Analyzer:
                     attempts += 1
                     log("  Failed to download repodata. Trying again!", e)
 
+                    # Try to identify which repo failed and disable it
+                    for repo_name in repo_names_to_load:
+                        if repo_name in error_msg:
+                            if repo_name not in failed_repos:
+                                log(f"  Disabling problematic repository: {repo_name}")
+                                failed_repos.append(repo_name)
+                                try:
+                                    repo_query = RepoQuery(base)
+                                    for repo_weak_ptr in repo_query:
+                                        repo_obj = repo_weak_ptr.get()
+                                        if repo_obj.get_id() == repo_name:
+                                            repo_obj.disable()
+                                            break
+                                except Exception as disable_err:
+                                    log(f"  Warning: Could not disable repo {repo_name}: {disable_err}")
+                            break
+
             if not success:
                 err = f"Failed to download repodata while analyzing environment '{env_conf['id']}' from '{repo['id']}' {arch}:"
                 err_log(err)
                 raise RepoDownloadError(err)
+
+            if failed_repos:
+                log(f"  WARNING: Proceeding without repositories: {', '.join(failed_repos)}")
 
             # DNF5: Create a Goal for package operations
             goal = Goal(base)
@@ -876,11 +1034,13 @@ class Analyzer:
             # Packages
             log("  Adding packages...")
             for pkg in env_conf["packages"]:
-                try:
-                    goal.add_install(pkg)
-                except (UserAssertionError, RepoRpmError) as e:
+                # DNF5: Check if package exists before adding
+                query = PackageQuery(base)
+                query.filter_name([pkg])
+                if query.empty():
                     env["errors"]["non_existing_pkgs"].append(pkg)
                     continue
+                goal.add_install(pkg)
 
             # Groups
             log("  Adding groups...")
@@ -898,11 +1058,13 @@ class Analyzer:
 
             # Architecture-specific packages
             for pkg in env_conf["arch_packages"][arch]:
-                try:
-                    goal.add_install(pkg)
-                except UserAssertionError, RepoRpmError:
+                # DNF5: Check if package exists before adding
+                query = PackageQuery(base)
+                query.filter_name([pkg])
+                if query.empty():
                     env["errors"]["non_existing_pkgs"].append(pkg)
                     continue
+                goal.add_install(pkg)
 
             # Resolve dependencies
             log("  Resolving dependencies...")
@@ -1083,6 +1245,13 @@ class Analyzer:
             #base.read_all_repos()
             self._load_repo_cached(base, repo, arch)
 
+            # Build list of repo names for error handling
+            repo_names_to_load = []
+            for repo_name, repo_data in repo["source"]["repos"].items():
+                if repo_data["limit_arches"] and arch not in repo_data["limit_arches"]:
+                    continue
+                repo_names_to_load.append(repo_name)
+
             # 0 %
 
             # Now I need to load the local RPMDB.
@@ -1092,7 +1261,43 @@ class Analyzer:
             if len(env_conf["packages"]) or len(env_conf["arch_packages"][arch]) or len(env_conf["groups"]):
                 # It's not empty! Load local data.
                 # DNF5: This loads both repos and system data
-                repo_sack.load_repos()
+                # This sometimes fails, so let's try at least N times with repo-disabling logic
+                MAX_TRIES = 10
+                attempts = 0
+                success = False
+                failed_repos = []
+                while attempts < MAX_TRIES:
+                    try:
+                        repo_sack.load_repos()
+                        success = True
+                        break
+                    except (UserAssertionError, DnfErr, RuntimeError, Dnf5RepoDownloadError) as err:
+                        attempts += 1
+                        error_msg = str(err)
+                        # log(f"  Failed to download repodata (attempt {attempts}/{MAX_TRIES}). Error: {error_msg}")
+
+                        # Try to identify which repo failed and disable it
+                        for repo_name in repo_names_to_load:
+                            if repo_name in error_msg:
+                                if repo_name not in failed_repos:
+                                    # log(f"  Disabling problematic repository: {repo_name}")
+                                    failed_repos.append(repo_name)
+                                    try:
+                                        repo_query = RepoQuery(base)
+                                        for repo_weak_ptr in repo_query:
+                                            repo_obj = repo_weak_ptr.get()
+                                            if repo_obj.get_id() == repo_name:
+                                                repo_obj.disable()
+                                                break
+                                    except Exception as disable_err:
+                                        pass
+                                        # log(f"  Warning: Could not disable repo {repo_name}: {disable_err}")
+                                break
+
+                if not success:
+                    err = f"Failed to download repodata while analyzing workload '{workload_conf_id} on '{env_conf_id}' from '{repo_id}' {arch}..."
+                    err_log(err)
+                    raise RepoDownloadError(err)
             else:
                 # It's empty. Treat it like we're using an empty installroot.
                 # This sometimes fails, so let's try at least N times
@@ -1100,6 +1305,7 @@ class Analyzer:
                 MAX_TRIES = 10
                 attempts = 0
                 success = False
+                failed_repos = []
                 while attempts < MAX_TRIES:
                     try:
                         repo_sack.load_repos()
@@ -1107,7 +1313,25 @@ class Analyzer:
                         break
                     except RepoError as err:
                         attempts += 1
+                        error_msg = str(err)
                         # log("  Failed to download repodata. Trying again!")
+
+                        # Try to identify which repo failed and disable it
+                        for repo_name in repo_names_to_load:
+                            if repo_name in error_msg:
+                                if repo_name not in failed_repos:
+                                    failed_repos.append(repo_name)
+                                    try:
+                                        repo_query = RepoQuery(base)
+                                        for repo_weak_ptr in repo_query:
+                                            repo_obj = repo_weak_ptr.get()
+                                            if repo_obj.get_id() == repo_name:
+                                                repo_obj.disable()
+                                                break
+                                    except Exception:
+                                        pass
+                                break
+
                 if not success:
                     err = f"Failed to download repodata while analyzing workload '{workload_conf_id} on '{env_conf_id}' from '{repo_id}' {arch}..."
                     err_log(err)
@@ -1121,9 +1345,10 @@ class Analyzer:
             # Packages
             # log("  Adding packages...")
             for pkg in workload_conf["packages"]:
-                try:
-                    goal.add_install(pkg)
-                except UserAssertionError, RepoRpmError:
+                # DNF5: Check if package exists before adding
+                query = PackageQuery(base)
+                query.filter_name([pkg])
+                if query.empty():
                     if pkg in self.settings["weird_packages_that_can_not_be_installed"]:
                         continue
                     else:
@@ -1132,6 +1357,7 @@ class Analyzer:
                         else:
                             workload["warnings"]["non_existing_pkgs"].append(pkg)
                         continue
+                goal.add_install(pkg)
 
             # Groups
             # log("  Adding groups...")
@@ -1176,25 +1402,29 @@ class Analyzer:
             # log("  Adding package placeholder dependencies...")
             for placeholder_name, placeholder_data in package_placeholders.items():
                 for pkg in placeholder_data["requires"]:
-                    try:
-                        goal.add_install(pkg)
-                    except UserAssertionError, RepoRpmError:
+                    # DNF5: Check if package exists before adding
+                    query = PackageQuery(base)
+                    query.filter_name([pkg])
+                    if query.empty():
                         if "strict" in workload_conf["options"]:
                             workload["errors"]["non_existing_placeholder_deps"].append(pkg)
                         else:
                             workload["warnings"]["non_existing_placeholder_deps"].append(pkg)
                         continue
+                    goal.add_install(pkg)
 
             # Architecture-specific packages
             for pkg in workload_conf["arch_packages"][arch]:
-                try:
-                    goal.add_install(pkg)
-                except UserAssertionError, RepoRpmError:
+                # DNF5: Check if package exists before adding
+                query = PackageQuery(base)
+                query.filter_name([pkg])
+                if query.empty():
                     if "strict" in workload_conf["options"]:
                         workload["errors"]["non_existing_pkgs"].append(pkg)
                     else:
                         workload["warnings"]["non_existing_pkgs"].append(pkg)
                     continue
+                goal.add_install(pkg)
 
             if workload["errors"]["non_existing_pkgs"] or workload["errors"]["non_existing_placeholder_deps"]:
                 error_message_list = []
@@ -1374,12 +1604,13 @@ class Analyzer:
             self.current_subprocesses -= 1
 
             # This basically means there was an exception in the processing and the process crashed
+            # or timed out (222 seconds total timeout)
             if queue_result.empty():
                 log("")
                 log("")
                 log("--------------------------------------------------------------------------")
                 log("")
-                log("ERROR: Workload analysis failed")
+                log("WARNING: Workload analysis timed out or crashed")
                 log("")
                 log("Details:")
                 log(f"  workload_conf: {workload_conf['id']}")
@@ -1387,16 +1618,38 @@ class Analyzer:
                 log(f"  repo:          {repo['id']}")
                 log(f"  arch:          {arch}")
                 log("")
-                log("More details somewhere above.")
+                log("Creating failed workload entry and continuing...")
                 log("")
                 log("--------------------------------------------------------------------------")
                 log("")
                 log("")
-                sys.exit(1)
 
-            workload = queue_result.get()
-
-            results[workload_id] = workload
+                # Create a failed workload result instead of crashing
+                workload = {}
+                workload["workload_conf_id"] = workload_conf["id"]
+                workload["env_conf_id"] = env_conf["id"]
+                workload["repo_id"] = repo["id"]
+                workload["arch"] = arch
+                workload["pkg_env_ids"] = []
+                workload["pkg_added_ids"] = []
+                workload["pkg_placeholder_ids"] = []
+                workload["srpm_placeholder_names"] = []
+                workload["pkg_relations"] = []
+                workload["errors"] = {}
+                workload["errors"]["non_existing_pkgs"] = []
+                workload["errors"]["non_existing_placeholder_deps"] = []
+                workload["errors"]["message"] = f"Workload analysis timed out after 222 seconds or subprocess crashed"
+                workload["warnings"] = {}
+                workload["warnings"]["non_existing_pkgs"] = []
+                workload["warnings"]["non_existing_placeholder_deps"] = []
+                workload["warnings"]["message"] = None
+                workload["succeeded"] = False
+                workload["env_succeeded"] = False
+                workload["labels"] = list(set(workload_conf["labels"]) & set(env_conf["labels"]))
+                results[workload_id] = workload
+            else:
+                workload = queue_result.get()
+                results[workload_id] = workload
 
     async def _analyze_workloads_async(self, results):
 
@@ -1650,7 +1903,15 @@ class Analyzer:
         log(f"  Includes {len(view['workload_ids'])} workloads.")
 
         # Packages
+        log(f"  Processing packages from {len(view['workload_ids'])} workloads...")
+        workload_counter = 0
+        total_workloads = len(view['workload_ids'])
+
         for workload_id in view["workload_ids"]:
+            workload_counter += 1
+            if workload_counter % 50 == 0:
+                log(f"    Progress: {workload_counter}/{total_workloads} workloads processed")
+
             workload = self.data["workloads"][workload_id]
             workload_conf_id = workload["workload_conf_id"]
             workload_conf = self.configs["workloads"][workload_conf_id]
@@ -1745,10 +2006,18 @@ class Analyzer:
                     del view["pkgs"][base_view_pkg_id]
 
         # Done with packages!
-        log(f"  Includes {len(view['pkgs'])} packages.")
+        log(f"  Done processing workload packages. Total packages in view: {len(view['pkgs'])}")
 
         # But not with source packages, that's an entirely different story!
+        log(f"  Building source package data from {len(view['pkgs'])} binary packages...")
+        pkg_counter = 0
+        total_pkgs = len(view["pkgs"])
+
         for pkg_id, pkg in view["pkgs"].items():
+            pkg_counter += 1
+            if pkg_counter % 1000 == 0:
+                log(f"    Progress: {pkg_counter}/{total_pkgs} packages processed for source mapping")
+
             srpm_id = pkg["sourcerpm"].rsplit(".src.rpm")[0]
 
             if srpm_id not in view["source_pkgs"]:
@@ -1770,19 +2039,33 @@ class Analyzer:
         return view
 
     def _analyze_views(self):
+        log("")
+        log("=====  Starting View Analysis =====")
+        log("")
 
         views = {}
 
         # First, analyse the standard views
+        log("Phase 1: Analyzing standard (compose) views...")
+        compose_view_count = sum(1 for v in self.configs["views"].values() if v["type"] == "compose")
+        log(f"  Found {compose_view_count} compose views to process")
+
         for view_conf_id in self.configs["views"]:
             view_conf = self.configs["views"][view_conf_id]
 
             if view_conf["type"] == "compose":
+                log(f"  Processing compose view: {view_conf_id}")
                 for arch in view_conf["architectures"]:
+                    log(f"    Architecture: {arch}")
                     view = self._analyze_view(view_conf, arch, views)
                     view_id = view["id"]
-
                     views[view_id] = view
+                    log(f"    ✅ Completed {view_id}")
+
+        log("")
+        log("Phase 2: Analyzing addon views...")
+        addon_view_count = sum(1 for v in self.configs["views"].values() if v["type"] == "addon")
+        log(f"  Found {addon_view_count} addon views to process")
 
         # Second, analyse the addon views
         # This is important as they need the standard views already available
@@ -1790,14 +2073,20 @@ class Analyzer:
             view_conf = self.configs["views"][view_conf_id]
 
             if view_conf["type"] == "addon":
+                log(f"  Processing addon view: {view_conf_id}")
                 base_view_conf_id = view_conf["base_view_id"]
                 base_view_conf = self.configs["views"][base_view_conf_id]
 
                 for arch in set(view_conf["architectures"]) & set(base_view_conf["architectures"]):
+                    log(f"    Architecture: {arch}")
                     view = self._analyze_view(view_conf, arch, views)
                     view_id = view["id"]
-
                     views[view_id] = view
+                    log(f"    ✅ Completed {view_id}")
+
+        log("")
+        log(f"View analysis complete! Total views created: {len(views)}")
+        log("")
 
         self.data["views"] = views
 
@@ -2174,6 +2463,7 @@ class Analyzer:
 
                     # Save the buildroot data
                     self.data["buildroot"]["srpms"][repo_id][arch][srpm_id]["queued"] = True
+        log(f"fake_workload_results -> {fake_workload_results}")
 
         asyncio.run(self._analyze_workloads_async(fake_workload_results))
 
