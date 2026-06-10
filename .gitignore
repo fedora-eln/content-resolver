@@ -1,6 +1,6 @@
 # IDE and editor files
-.idea
-.vscode
+.idea/
+.vscode/
 *.swp
 
 # Python cache and bytecode
@@ -25,3 +25,6 @@ actual_output
 actual_configs
 content-resolver-input
 debug_*.json
+
+# AI Tools
+.claude/

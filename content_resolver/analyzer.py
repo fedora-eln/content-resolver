@@ -1471,7 +1471,7 @@ class Analyzer:
             try:
                 # DNF5: resolve via goal
                 transaction = goal.resolve()
-            except DnfErr as err:
+            except (DnfErr, RuntimeError, Exception) as err:
                 workload["succeeded"] = False
                 workload["errors"]["message"] = str(err)
                 #log("  Failed!  (Error message will be on the workload results page.")

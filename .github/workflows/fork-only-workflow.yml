@@ -38,6 +38,7 @@ jobs:
           python3-koji \
           python3-libdnf5 \
           python3-pytest \
+          python3-pytest-cov \
           python3-yaml
 
     - name: Clean up
