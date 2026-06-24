@@ -3,7 +3,6 @@ import datetime
 import json
 import multiprocessing
 import os
-import re
 import sys
 import tempfile
 import time
@@ -11,7 +10,7 @@ import urllib.request
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 import koji
-from libdnf5.base import Goal, GoalJobSettings
+from libdnf5.base import Base, Goal, GoalJobSettings
 from libdnf5.exception import BaseTransactionError
 from libdnf5.exception import Error as DnfErr
 from libdnf5.exception import RepoDownloadError as Dnf5RepoDownloadError
@@ -34,13 +33,41 @@ from content_resolver.utils import (
 
 
 def pkg_placeholder_name_to_id(placeholder_name):
-    placeholder_id = f"{placeholder_name}-000-placeholder.placeholder"
-    return placeholder_id
+    return f"{placeholder_name}-000-placeholder.placeholder"
 
 
 def pkg_placeholder_name_to_nevr(placeholder_name):
-    placeholder_id = f"{placeholder_name}-000-placeholder"
-    return placeholder_id
+    return f"{placeholder_name}-000-placeholder"
+
+
+def is_package_resolvable(base: Base, pkg_name: str) -> bool:
+    """
+    Check if a package name is resolvable, either as a real package or via provides.
+
+    Args:
+        base: DNF5 base object
+        pkg_name: Package name to check
+
+    Returns:
+        bool: True if the package can be resolved, False otherwise
+    """
+    query = PackageQuery(base)
+
+    # First check if it exists as a real package name
+    query.filter_name([pkg_name])
+    if not query.empty():
+        return True
+
+    # If not found by name, check if any package provides it.
+    # Note: Must create a new query because DNF5 filters are cumulative.
+    # Reusing the filtered query would search for provides within the
+    # already-filtered (possibly empty) result set, not all packages.
+    query = PackageQuery(base)
+    query.filter_provides([pkg_name])
+    if not query.empty():
+        return True
+
+    return False
 
 
 #####################################################
@@ -1037,10 +1064,8 @@ class Analyzer:
             # Packages
             log("  Adding packages...")
             for pkg in env_conf["packages"]:
-                # DNF5: Check if package exists before adding
-                query = PackageQuery(base)
-                query.filter_name([pkg])
-                if query.empty():
+                # DNF5: Check if package is resolvable (by name or provides) before adding
+                if not is_package_resolvable(base, pkg):
                     env["errors"]["non_existing_pkgs"].append(pkg)
                     continue
                 goal.add_install(pkg)
@@ -1061,10 +1086,8 @@ class Analyzer:
 
             # Architecture-specific packages
             for pkg in env_conf["arch_packages"][arch]:
-                # DNF5: Check if package exists before adding
-                query = PackageQuery(base)
-                query.filter_name([pkg])
-                if query.empty():
+                # DNF5: Check if package is resolvable (by name or provides) before adding
+                if not is_package_resolvable(base, pkg):
                     env["errors"]["non_existing_pkgs"].append(pkg)
                     continue
                 goal.add_install(pkg)
@@ -1348,10 +1371,8 @@ class Analyzer:
             # Packages
             # log("  Adding packages...")
             for pkg in workload_conf["packages"]:
-                # DNF5: Check if package exists before adding
-                query = PackageQuery(base)
-                query.filter_name([pkg])
-                if query.empty():
+                # DNF5: Check if package is resolvable (by name or provides) before adding
+                if not is_package_resolvable(base, pkg):
                     if pkg in self.settings["weird_packages_that_can_not_be_installed"]:
                         continue
                     else:
@@ -1405,10 +1426,8 @@ class Analyzer:
             # log("  Adding package placeholder dependencies...")
             for placeholder_name, placeholder_data in package_placeholders.items():
                 for pkg in placeholder_data["requires"]:
-                    # DNF5: Check if package exists before adding
-                    query = PackageQuery(base)
-                    query.filter_name([pkg])
-                    if query.empty():
+                    # DNF5: Check if package is resolvable (by name or provides) before adding
+                    if not is_package_resolvable(base, pkg):
                         if "strict" in workload_conf["options"]:
                             workload["errors"]["non_existing_placeholder_deps"].append(pkg)
                         else:
@@ -1418,10 +1437,8 @@ class Analyzer:
 
             # Architecture-specific packages
             for pkg in workload_conf["arch_packages"][arch]:
-                # DNF5: Check if package exists before adding
-                query = PackageQuery(base)
-                query.filter_name([pkg])
-                if query.empty():
+                # DNF5: Check if package is resolvable (by name or provides) before adding
+                if not is_package_resolvable(base, pkg):
                     if "strict" in workload_conf["options"]:
                         workload["errors"]["non_existing_pkgs"].append(pkg)
                     else:
