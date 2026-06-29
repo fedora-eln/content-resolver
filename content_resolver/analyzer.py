@@ -831,7 +831,21 @@ class Analyzer:
                 except:
                     pass
 
-    def _analyze_package_relations(self, dnf_query, package_placeholders=None):
+    def _analyze_package_relations(self, packages, package_placeholders=None):
+        """
+        Analyze package relationships for the given set of packages.
+
+        Args:
+            packages: Iterable of DNF5 package objects (e.g., set, PackageQuery)
+            package_placeholders: Optional dict of placeholder packages
+
+        Returns:
+            dict: Package relations mapping pkg_id -> relation data
+
+        Note: Accepts any iterable of package objects - typically the actual packages
+        selected by DNF during installation. Do NOT pass a query filtered by name,
+        as that would include all versions from all repos (including low-priority duplicates).
+        """
         # TODO: Implement DNF5 package relationship analysis
         # DNF5 PackageQuery.filter() API is different
         # Temporarily returning minimal relations structure to test rest of migration
@@ -842,7 +856,7 @@ class Analyzer:
         relations = {}
 
         # Create empty relation entries for all packages
-        for pkg in dnf_query:
+        for pkg in packages:
             pkg_id = f"{pkg.get_name()}-{pkg.get_evr()}.{pkg.get_arch()}"
             relations[pkg_id] = {}
             relations[pkg_id]["required_by"] = []
@@ -1129,24 +1143,23 @@ class Analyzer:
                 env["errors"]["message"] = str(err)
                 return env
 
-            # DNF5: Create PackageQuery from transaction
-            log("  Creating a DNF Query object...")
             # Get packages from transaction
+            log("  Extracting packages from transaction...")
             # DNF5: transaction packages vector is directly indexable
             pkg_list = []
             trans_pkgs = transaction.get_transaction_packages()
             for i in range(trans_pkgs.size()):
                 trans_pkg = trans_pkgs[i]
                 pkg_list.append(trans_pkg.get_package())
-            query = PackageQuery(base)
-            # Filter to only packages in our list
-            query.filter_name([p.get_name() for p in pkg_list])
 
-            for pkg in query:
+            # Use the actual packages from the transaction.
+            # Don't re-query by name - that would return ALL versions from ALL repos,
+            # including lower-priority duplicates (e.g., both ELN and Rawhide versions).
+            for pkg in pkg_list:
                 pkg_id = f"{pkg.get_name()}-{pkg.get_evr()}.{pkg.get_arch()}"
                 env["pkg_ids"].append(pkg_id)
 
-            env["pkg_relations"] = self._analyze_package_relations(query)
+            env["pkg_relations"] = self._analyze_package_relations(pkg_list)
 
             log(f"  Done!  ({len(env['pkg_ids'])} packages in total)")
             log("")
@@ -1472,6 +1485,8 @@ class Analyzer:
                     for pkg_name in workload["warnings"]["non_existing_pkgs"]:
                         pkg_string = f"  - {pkg_name}"
                         error_message_list.append(pkg_string)
+                    error_message_list.append("")
+                    error_message_list.append("Note: Add 'strict' to the workload options to treat missing packages as errors.")
                 if workload["warnings"]["non_existing_placeholder_deps"]:
                     error_message_list.append("The following dependencies of package placeholders are not available (and were skipped):")
                     # TODO: use comprehension and `error_message_list.extend([])`
@@ -1480,6 +1495,7 @@ class Analyzer:
                         error_message_list.append(pkg_string)
                 error_message = "\n".join(error_message_list)
                 workload["warnings"]["message"] = str(error_message)
+                log(f"  Warning: {len(workload['warnings']['non_existing_pkgs'])} packages not found and were skipped")
 
             # 37 %
 
@@ -1490,10 +1506,80 @@ class Analyzer:
                 transaction = goal.resolve()
             except (DnfErr, RuntimeError, Exception) as err:
                 workload["succeeded"] = False
-                workload["errors"]["message"] = str(err)
-                #log("  Failed!  (Error message will be on the workload results page.")
-                #log("")
+
+                # Enhanced error message for dependency failures
+                error_message = str(err)
+
+                # Check if this is a dependency chain failure (missing transitive dependency)
+                if "nothing provides" in error_message.lower() or "but none of the providers can be installed" in error_message.lower():
+                    error_lines = ["Dependency resolution failed:", ""]
+                    error_lines.append("This workload requires packages that have unmet dependencies.")
+                    error_lines.append("Common causes:")
+                    error_lines.append("  - A required package has been retired from Fedora")
+                    error_lines.append("  - A dependency is missing or not yet built")
+                    error_lines.append("  - Package maintainer needs to update dependencies")
+                    error_lines.append("")
+                    error_lines.append("Detailed error from DNF:")
+                    error_lines.append("-" * 70)
+                    error_lines.append(error_message)
+                    workload["errors"]["message"] = "\n".join(error_lines)
+                else:
+                    workload["errors"]["message"] = error_message
+
+                log(f"  Failed to resolve dependencies for {workload_conf['id']}")
+                log(f"  Error: {error_message[:200]}...")
                 return workload
+
+            # CRITICAL DNF4 vs DNF5 DIFFERENCE:
+            # DNF4 raises exceptions when packages can't be resolved due to dependency failures.
+            # DNF5 does NOT raise exceptions - it returns a transaction with problems recorded.
+            # If we don't check transaction.get_problems(), packages with unresolvable dependencies
+            # will be silently skipped, showing as "succeeded" with 0 packages installed.
+            # If not used it causes the packages that have unresolvable deps to show NO errors in DNF5 while we
+            # expect "nothing provides" errors.
+            if transaction.get_problems() > 0:
+                # Get error messages from resolve logs
+                resolve_logs = transaction.get_resolve_logs_as_strings()
+                error_message = "\n".join(resolve_logs)
+
+                # DNF5 is overly strict about version conflicts between repositories with different priorities.
+                # If the error is only about "cannot install both X from repo1 and X from repo2", this is
+                # just a repo priority conflict, not a real dependency failure. DNF will use the higher
+                # priority version or the already-installed version.
+                # Example: "cannot install both mingw-filesystem-base-151-1.eln158 from buildroot and
+                #           mingw-filesystem-base-151-1.eln154 from CRB"
+                # This should NOT fail the buildroot - it's expected behavior when buildroot has newer builds.
+                is_only_repo_priority_conflict = (
+                    "cannot install both" in error_message.lower() and
+                    "from buildroot and" in error_message.lower() and
+                    "nothing provides" not in error_message.lower()
+                )
+
+                if is_only_repo_priority_conflict:
+                    # Ignore repo priority conflicts - these are not real failures
+                    log(f"  Ignoring repository priority conflict (buildroot has different version)")
+                else:
+                    # Real dependency failure
+                    workload["succeeded"] = False
+                    workload["errors"]["message"] = error_message
+
+                    # Enhanced error message for dependency failures
+                    if "nothing provides" in error_message.lower() or \
+                            "but none of the providers can be installed" in error_message.lower():
+                        _verbose_msg = f"""Dependency resolution failed:
+                        This workload requires packages that have unmet dependencies.
+                        Common causes:
+                            - A required package has been retired from Fedora
+                            - A dependency is missing or not yet built"
+                            - Package maintainer needs to update dependencies"
+                        Detailed error from DNF:
+                        {"-" * 70}
+                        {error_message}
+                        """
+                        workload["errors"]["message"] = _verbose_msg
+                    log(f"  Failed to resolve dependencies for {workload_conf['id']}")
+                    log(f"  Error: {error_message[:200]}...")
+                    return workload
 
             # 43 %
 
@@ -1514,8 +1600,6 @@ class Analyzer:
             pkgs_added = set(pkgs_added)
 
             pkgs_all = set.union(pkgs_env, pkgs_added)
-            query_all = PackageQuery(base)
-            query_all.filter_name([p.get_name() for p in pkgs_all])
 
             # OK all good so save stuff now
             # TODO: use comprehensions & .extend
@@ -1538,7 +1622,10 @@ class Analyzer:
 
             # 43 %
 
-            workload["pkg_relations"] = self._analyze_package_relations(query_all, package_placeholders)
+            # Use the actual packages that were installed/selected by DNF's priority logic.
+            # Don't re-query by name - that would return ALL versions from ALL repos,
+            # including lower-priority duplicates (e.g., both ELN and Rawhide versions).
+            workload["pkg_relations"] = self._analyze_package_relations(pkgs_all, package_placeholders)
 
             # 100 %
 
