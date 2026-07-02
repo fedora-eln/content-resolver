@@ -339,16 +339,42 @@ def process_single_srpm_root_log(work_item):
 
         # Download root.log
         root_log_url = f"{koji_files_url}/{koji_log_path}"
-        root_log_contents = _download_root_log_with_retry(root_log_url)
+        try:
+            root_log_contents = _download_root_log_with_retry(root_log_url)
+        except KojiRootLogError as e:
+            # Download failed
+            return {
+                'srpm_id': srpm_id,
+                'arch': arch,
+                'deps': [],
+                'error': f"Download failed: {str(e)}"
+            }
 
         # Parse dependencies
-        deps = _get_build_deps_from_a_root_log(root_log_contents)
+        try:
+            deps = _get_build_deps_from_a_root_log(root_log_contents)
+        except Exception as e:
+            # Parsing failed
+            return {
+                'srpm_id': srpm_id,
+                'arch': arch,
+                'deps': [],
+                'error': f"Parse failed: {str(e)}"
+            }
+
+        # Check if parsing yielded suspiciously few dependencies
+        warning = None
+        if len(deps) == 0:
+            warning = "WARNING: Zero dependencies found (possible truncated/corrupted log)"
+        elif len(deps) < 3:
+            warning = f"WARNING: Only {len(deps)} dependencies found (expected more)"
 
         return {
             'srpm_id': srpm_id,
             'arch': arch,
             'deps': deps,
-            'error': None
+            'error': None,
+            'warning': warning
         }
 
     except Exception as e:
@@ -423,6 +449,8 @@ class Analyzer:
 
         try:
             self.cache["root_log_deps"]["current"] = load_data(self.settings["root_log_deps_cache_path"])
+            # Validate cached root.log data for issues
+            self._validate_root_log_cache()
         except FileNotFoundError:
             pass
 
@@ -454,6 +482,69 @@ class Analyzer:
             )
 
             counter += 1
+
+    def _validate_root_log_cache(self):
+        """
+        Validate cached root.log dependency data for invalid entries.
+        Reports packages with zero or very low dependency counts.
+        """
+        cache = self.cache["root_log_deps"]["current"]
+        if not cache:
+            return
+
+        zero_deps_cached = []
+        low_deps_cached = []
+
+        for koji_id, arches in cache.items():
+            for arch, srpms in arches.items():
+                for srpm_id, deps in srpms.items():
+                    if not isinstance(deps, list):
+                        continue
+
+                    if len(deps) == 0:
+                        zero_deps_cached.append({
+                            'srpm_id': srpm_id,
+                            'arch': arch,
+                            'koji_id': koji_id
+                        })
+                    elif len(deps) < 3:
+                        low_deps_cached.append({
+                            'srpm_id': srpm_id,
+                            'arch': arch,
+                            'deps': deps,
+                            'koji_id': koji_id
+                        })
+
+        # Some verbose logging for debugging
+        # TODO: Enable some form of log level to increase/decrease verbosity of logs
+        if zero_deps_cached or low_deps_cached:
+            log("")
+            log("=" * 80)
+            log("⚠️  ROOT LOG CACHE VALIDATION")
+            log("=" * 80)
+
+        if zero_deps_cached:
+            log(f"Found {len(zero_deps_cached)} cached packages with ZERO dependencies")
+            log("These packages may have had root.log download/parse failures in previous runs:")
+            log("")
+            for item in zero_deps_cached[:15]:
+                log(f"  ⚠️  {item['srpm_id']} ({item['arch']})")
+            if len(zero_deps_cached) > 15:
+                log(f"  ... and {len(zero_deps_cached) - 15} more")
+            log("")
+            log("Consider clearing cache for these packages to retry root.log download")
+
+        if low_deps_cached:
+            log("")
+            log(f"Found {len(low_deps_cached)} cached packages with very few dependencies (<3)")
+            for item in low_deps_cached[:10]:
+                log(f"  ⚠️  {item['srpm_id']} ({item['arch']}): {item['deps']}")
+            if len(low_deps_cached) > 10:
+                log(f"  ... and {len(low_deps_cached) - 10} more")
+
+        if zero_deps_cached or low_deps_cached:
+            log("=" * 80)
+            log("")
 
     def _get_available_compose_variants(self, repo, arch):
         """
@@ -1527,7 +1618,9 @@ class Analyzer:
                     workload["errors"]["message"] = error_message
 
                 log(f"  Failed to resolve dependencies for {workload_conf['id']}")
-                log(f"  Error: {error_message[:200]}...")
+                # Show full error for debugging (truncate at 2000 chars if too long)
+                error_display = error_message if len(error_message) <= 2000 else error_message[:2000] + "...(truncated)"
+                log(f"  Error: {error_display}")
                 return workload
 
             # CRITICAL DNF4 vs DNF5 DIFFERENCE:
@@ -1542,43 +1635,48 @@ class Analyzer:
                 resolve_logs = transaction.get_resolve_logs_as_strings()
                 error_message = "\n".join(resolve_logs)
 
-                # DNF5 is overly strict about version conflicts between repositories with different priorities.
-                # If the error is only about "cannot install both X from repo1 and X from repo2", this is
-                # just a repo priority conflict, not a real dependency failure. DNF will use the higher
-                # priority version or the already-installed version.
-                # Example: "cannot install both mingw-filesystem-base-151-1.eln158 from buildroot and
-                #           mingw-filesystem-base-151-1.eln154 from CRB"
-                # This should NOT fail the buildroot - it's expected behavior when buildroot has newer builds.
-                is_only_repo_priority_conflict = (
-                    "cannot install both" in error_message.lower() and
-                    "from buildroot and" in error_message.lower() and
-                    "nothing provides" not in error_message.lower()
-                )
+                # DNF5 reports repo priority conflicts that DNF4 silently resolved.
+                # Filter out version conflicts between repos (expected with multi-repo setups).
+                # Keep real dependency failures (missing packages, broken deps).
 
-                if is_only_repo_priority_conflict:
-                    # Ignore repo priority conflicts - these are not real failures
-                    log(f"  Ignoring repository priority conflict (buildroot has different version)")
+                # Check if entire error message is about version conflicts between repos
+                error_lower = error_message.lower()
+
+                # Pattern 1: "cannot install both X from RepoA and X from RepoB"
+                has_cannot_install_both = "cannot install both" in error_lower and " from " in error_lower
+
+                # Pattern 2: Multi-line version conflicts like:
+                #   "package X from RepoA requires Y = v1, but none of the providers can be installed"
+                #   "package Z from RepoB requires Y = v2, but none of the providers can be installed"
+                # These indicate different repos wanting different versions of same dependency
+                lines = error_message.split('\n')
+                requires_lines = [l for l in lines if 'requires' in l.lower() and 'from' in l.lower()]
+                has_multi_version_conflict = len(requires_lines) >= 2
+
+                # Pattern 3: "conflicting requests" or "cannot install the best candidate"
+                has_conflict_markers = ("conflicting requests" in error_lower or
+                                       "cannot install the best candidate" in error_lower)
+
+                # Real dependency errors that should NOT be filtered
+                has_nothing_provides = "nothing provides" in error_lower
+                has_package_already_installed = "already installed" in error_lower
+
+                # Filter logic: ignore if it's ONLY repo conflicts, no real missing deps
+                is_repo_conflict = (has_cannot_install_both or
+                                  (has_multi_version_conflict and has_conflict_markers))
+                is_real_error = has_nothing_provides
+
+                if is_repo_conflict and not is_real_error:
+                    # Repo priority conflict - expected behavior, ignore
+                    log(f"  Ignoring repository priority conflict (version mismatch between repos)")
                 else:
                     # Real dependency failure
                     workload["succeeded"] = False
                     workload["errors"]["message"] = error_message
-
-                    # Enhanced error message for dependency failures
-                    if "nothing provides" in error_message.lower() or \
-                            "but none of the providers can be installed" in error_message.lower():
-                        _verbose_msg = f"""Dependency resolution failed:
-                        This workload requires packages that have unmet dependencies.
-                        Common causes:
-                            - A required package has been retired from Fedora
-                            - A dependency is missing or not yet built"
-                            - Package maintainer needs to update dependencies"
-                        Detailed error from DNF:
-                        {"-" * 70}
-                        {error_message}
-                        """
-                        workload["errors"]["message"] = _verbose_msg
                     log(f"  Failed to resolve dependencies for {workload_conf['id']}")
-                    log(f"  Error: {error_message[:200]}...")
+                    # Show truncated error for debugging
+                    error_display = error_message if len(error_message) <= 500 else error_message[:500] + "...(truncated)"
+                    log(f"  Error: {error_display}")
                     return workload
 
             # 43 %
@@ -2364,6 +2462,11 @@ class Analyzer:
         # Process in parallel using ProcessPoolExecutor
         max_workers = min(self.settings["parallel_max"], len(work_items))
 
+        # Track failures for reporting
+        failed_downloads = []  # Root logs that failed to download
+        zero_deps = []  # Packages with zero dependencies (suspicious)
+        low_deps = []  # Packages with very few deps (possibly truncated logs)
+
         with ProcessPoolExecutor(max_workers=max_workers) as executor:
             # Submit all jobs
             future_to_item = {
@@ -2386,9 +2489,34 @@ class Analyzer:
                     if result['error']:
                         log(f"[ Buildroot - pass {pass_counter} - {completed_count} of {total_count} ] "
                             f"Failed {result['srpm_id']} {result['arch']}: {result['error']}")
+                        failed_downloads.append({
+                            'srpm_id': result['srpm_id'],
+                            'arch': result['arch'],
+                            'error': result['error']
+                        })
                     else:
-                        log(f"[ Buildroot - pass {pass_counter} - {completed_count} of {total_count} ] "
-                            f"Completed {result['srpm_id']} {result['arch']} - found {len(result['deps'])} deps")
+                        # Log completion with warning if present
+                        deps_count = len(result['deps'])
+                        warning_msg = result.get('warning', '')
+                        if warning_msg:
+                            log(f"[ Buildroot - pass {pass_counter} - {completed_count} of {total_count} ] "
+                                f"⚠️  {result['srpm_id']} {result['arch']} - {deps_count} deps - {warning_msg}")
+                        else:
+                            log(f"[ Buildroot - pass {pass_counter} - {completed_count} of {total_count} ] "
+                                f"Completed {result['srpm_id']} {result['arch']} - found {deps_count} deps")
+
+                        # Detect suspicious results
+                        if deps_count == 0:
+                            zero_deps.append({
+                                'srpm_id': result['srpm_id'],
+                                'arch': result['arch']
+                            })
+                        elif deps_count < 3:
+                            low_deps.append({
+                                'srpm_id': result['srpm_id'],
+                                'arch': result['arch'],
+                                'deps': result['deps']
+                            })
 
                 except Exception as e:
                     log(f"Failed to process {work_item['srpm_id']}: {e}")
@@ -2400,9 +2528,55 @@ class Analyzer:
                         "error": str(e),
                     }
                     self._apply_srpm_result(work_item, error_result)
+                    failed_downloads.append({
+                        'srpm_id': work_item["srpm_id"],
+                        'arch': work_item["arch"],
+                        'error': str(e)
+                    })
 
         # Save updated cache
         dump_data(self.settings["root_log_deps_cache_path"], self.cache["root_log_deps"]["next"])
+
+        # Report summary of issues
+        log("")
+        log("=" * 80)
+        log("ROOT LOG PROCESSING SUMMARY")
+        log("=" * 80)
+
+        if failed_downloads:
+            log(f"⚠️  FAILED DOWNLOADS: {len(failed_downloads)} root.log files failed to download/parse")
+            log("")
+            for item in failed_downloads[:20]:  # Show first 20
+                log(f"  ❌ {item['srpm_id']} ({item['arch']})")
+                log(f"     Error: {item['error'][:100]}")
+            if len(failed_downloads) > 20:
+                log(f"  ... and {len(failed_downloads) - 20} more")
+
+        if zero_deps:
+            log("")
+            log(f"⚠️  ZERO DEPENDENCIES: {len(zero_deps)} packages reported 0 build dependencies")
+            log("   (This is unusual - most packages have at least bash, gcc, etc.)")
+            log("")
+            for item in zero_deps[:20]:
+                log(f"  ⚠️  {item['srpm_id']} ({item['arch']})")
+            if len(zero_deps) > 20:
+                log(f"  ... and {len(zero_deps) - 20} more")
+
+        if low_deps:
+            log("")
+            log(f"⚠️  LOW DEPENDENCIES: {len(low_deps)} packages have very few dependencies (<3)")
+            log("   (Possibly truncated or corrupted root.log files)")
+            log("")
+            for item in low_deps[:10]:
+                log(f"  ⚠️  {item['srpm_id']} ({item['arch']}): {item['deps']}")
+            if len(low_deps) > 10:
+                log(f"  ... and {len(low_deps) - 10} more")
+
+        if not failed_downloads and not zero_deps and not low_deps:
+            log("✅ All root.log files processed successfully with reasonable dependency counts")
+
+        log("=" * 80)
+        log("")
 
         log("")
         log("  DONE!")

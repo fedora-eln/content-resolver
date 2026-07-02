@@ -943,8 +943,8 @@ class ConfigManager:
                 log(f"  |  {message}")
             log("  -------------------------------------------------------------------------")
             log("")
-            # FIXME: settings may have no reference
-            if settings.get("strict", False):
+            # Check strict mode setting
+            if self.settings.get("strict", False):
                 raise ConfigError("Config file errors encountered in strict mode")
         else:
             log("")
