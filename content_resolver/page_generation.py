@@ -21,19 +21,15 @@ def _generate_html_page(template_name, template_data, page_name, settings):
     if not template_data:
         template_data = {}
     template_data["global_refresh_time_started"] = settings["global_refresh_time_started"]
+    template_data["approx_runtime"] = settings.get("approx_runtime")
 
     page = template.render(**template_data)
+    filename = f"{page_name.replace(":", "--")}.html"
 
-    filename = ("{page_name}.html".format(
-        page_name=page_name.replace(":", "--")
-    ))
-
-    log("  Writing file...  ({filename})".format(
-        filename=filename
-    ))
+    log(f"  Writing file...  ({filename})")
     with open(os.path.join(output, filename), "w") as file:
         file.write(page)
-    
+
     log("  Done!")
     log("")
 
@@ -55,11 +51,11 @@ def _generate_workload_pages(query):
                 repo_id=repo_id
             )
             _generate_html_page("workload_overview", template_data, page_name, query.settings)
-    
+
     # Workload detail pages
     for workload_id in query.workloads(None,None,None,None,list_all=True):
         workload = query.data["workloads"][workload_id]
-        
+
         workload_conf_id = workload["workload_conf_id"]
         workload_conf = query.configs["workloads"][workload_conf_id]
 
@@ -87,7 +83,7 @@ def _generate_workload_pages(query):
             workload_id=workload_id
         )
         _generate_html_page("workload_dependencies", template_data, page_name, query.settings)
-    
+
     # Workload compare arches pages
     for workload_conf_id in query.workloads(None,None,None,None,output_change="workload_conf_ids"):
         for env_conf_id in query.workloads(workload_conf_id,None,None,None,output_change="env_conf_ids"):
@@ -129,7 +125,7 @@ def _generate_workload_pages(query):
                 )
 
                 _generate_html_page("workload_cmp_arches", template_data, page_name, query.settings)
-    
+
     # Workload compare envs pages
     for workload_conf_id in query.workloads(None,None,None,None,output_change="workload_conf_ids"):
         for repo_id in query.workloads(workload_conf_id,None,None,None,output_change="repo_ids"):
@@ -169,7 +165,7 @@ def _generate_workload_pages(query):
                 )
 
                 _generate_html_page("workload_cmp_envs", template_data, page_name, query.settings)
-    
+
     log("  Done!")
     log("")
 
@@ -190,7 +186,7 @@ def _generate_env_pages(query):
                 repo_id=repo_id
             )
             _generate_html_page("env_overview", template_data, page_name, query.settings)
-    
+
     # env detail pages
     for env_id in query.envs(None,None,None,list_all=True):
         env = query.data["envs"][env_id]
@@ -218,7 +214,7 @@ def _generate_env_pages(query):
             env_id=env_id
         )
         _generate_html_page("env_dependencies", template_data, page_name, query.settings)
-    
+
     # env compare arches pages
     for env_conf_id in query.envs(None,None,None,output_change="env_conf_ids"):
         for repo_id in query.envs(env_conf_id,None,None,output_change="repo_ids"):
@@ -264,7 +260,7 @@ def _generate_maintainer_pages(query):
     log("Generating maintainer pages...")
 
     for maintainer in query.maintainers():
-    
+
         template_data = {
             "query": query,
             "maintainer": maintainer
@@ -309,7 +305,7 @@ def _generate_config_pages(query):
             repo_id=repo_id
         )
         _generate_html_page("config_repo", template_data, page_name, query.settings)
-    
+
     # Config env pages
     for env_conf_id,env_conf in query.configs["envs"].items():
         template_data = {
@@ -353,7 +349,7 @@ def _generate_config_pages(query):
             view_conf_id=view_conf_id
         )
         _generate_html_page("config_view", template_data, page_name, query.settings)
-    
+
     # Config unwanted pages
     for unwanted_conf_id,unwanted_conf in query.configs["unwanteds"].items():
         template_data = {
@@ -465,7 +461,7 @@ def _generate_view_pages(query):
             #_generate_html_page("view_packages", template_data, page_name, query.settings)
             # ...
 
-        
+
         # Generate the RPM pages
         for pkg_name, pkg in view_all_arches["pkgs_by_name"].items():
 
@@ -562,7 +558,7 @@ def generate_pages(query):
     _generate_html_page("labels", template_data, "labels", query.settings)
     _generate_html_page("views", template_data, "views", query.settings)
     _generate_html_page("maintainers", template_data, "maintainers", query.settings)
-    
+
     # Generate repo pages
     _generate_repo_pages(query)
 

@@ -865,13 +865,6 @@ def generate_report(
         report += "2. Replace them with the corresponding tags from above\n"
         report += "3. Test the changes locally before deploying\n\n"
 
-        report += "### Changelogs\n\n"
-        for package, current, target, latest, cdn_urls in safe_updates:
-            is_partial = target != latest
-            if is_partial:
-                report += f"- **{package}** {current} → {target}: https://www.npmjs.com/package/{package}?activeTab=versions (⚠️ Latest is {latest})\n"
-            else:
-                report += f"- **{package}** {current} → {target}: https://www.npmjs.com/package/{package}?activeTab=versions\n"
         report += "\n"
 
     return report

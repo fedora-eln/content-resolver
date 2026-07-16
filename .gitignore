@@ -25,3 +25,8 @@ actual_output
 actual_configs
 content-resolver-input
 debug_*.json
+
+.claude
+.env
+.venv
+venv

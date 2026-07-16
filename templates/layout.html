@@ -4,70 +4,35 @@
 <head>
   <meta charset="utf-8">
   <title>{% block title %} Content Resolver {% endblock %}</title>
-  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css"
-    integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
-  <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js"
-    integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo"
-    crossorigin="anonymous"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"
-    integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1"
-    crossorigin="anonymous"></script>
-  <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"
-    integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM"
-    crossorigin="anonymous"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css"
+        integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB"
+        crossorigin="anonymous">
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"
+          integrity="sha384-1H217gwSVyLSIfaLxHbE7dRb3v4mYCKbpQvzx0cegeju1MVsGrX5xXxAvs/HgeFs"
+          crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"
+          integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI"
+          crossorigin="anonymous"></script>
 
   <!-- Datatables test begin -->
-  <script type="text/javascript" charset="utf8"
-    src="https://cdn.datatables.net/1.10.20/js/jquery.dataTables.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/datatables.net@2.3.8/js/dataTables.min.js"
+          integrity="sha384-vKSHfmUIK/B5LfOmzrP+424efQhNcgZm+sqxgq/DNCicqQRp/V6pVc4HCaRzeQZw"
+          crossorigin="anonymous"></script>
   <!-- Datatables test end -->
 
   <!-- Chart stuff start -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.8.0/Chart.bundle.min.js"
-    integrity="sha256-xKeoJ50pzbUGkpQxDYHD7o7hxe0LaOGeguUidbq6vis=" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"
+          integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ"
+          crossorigin="anonymous"></script>
   <!-- Chart stuff end -->
 
-  <script src="https://cdn.jsdelivr.net/npm/axios@0.12.0/dist/axios.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/axios@1.18.1/dist/esm/axios.min.js"
+          integrity="sha384-XS/U149tK5TXlDa0/D4JK6AkRwav7QcCkuYZDKdVxWN9jKwU99elVEGO4nee1kV+"
+          crossorigin="anonymous"></script>
 
   <link rel="stylesheet" href="_static/feedback_pipeline.css">
 
   <link rel="icon" type="image/png" href="_static/favicon.png"/>
-
-  <style>
-    table.dataTable thead .sorting,
-    table.dataTable thead .sorting_asc,
-    table.dataTable thead .sorting_desc,
-    table.dataTable thead .sorting_asc_disabled,
-    table.dataTable thead .sorting_desc_disabled {
-      cursor: pointer;
-      *cursor: hand;
-      background-repeat: no-repeat;
-      background-position: 8px;
-    }
-
-    table.dataTable thead .sorting {
-      background-image: url("_static/images/sort_both.png");
-    }
-
-    table.dataTable thead .sorting_asc {
-      background-image: url("_static/images/sort_asc.png");
-    }
-
-    table.dataTable thead .sorting_desc {
-      background-image: url("_static/images/sort_desc.png");
-    }
-
-    table.dataTable thead .sorting_asc_disabled {
-      background-image: url("_static/images/sort_asc_disabled.png");
-    }
-
-    table.dataTable thead .sorting_desc_disabled {
-      background-image: url("_static/images/sort_desc_disabled.png");
-    }
-
-    table.dataTable thead .sort_control_row {
-      font-weight: bold !important;
-    }
-  </style>
 
 </head>
 
@@ -79,13 +44,15 @@
   </nav>
   {% block content %}{% endblock %}
 
-  <div style="background-color: #e9ecef; color: grey; border-top: 1px solid #212529">
-    <div class="container-fluid" style="padding-top: 4px; padding-bottom: 4px">
+  <div class="container-fluid runtime row"  >
+    <div class="col ">
       Page refreshed at {{global_refresh_time_started}}.
     </div>
+    <!-- hidden field to show runtime -->
+    <div class="col" style="color: #e9ecef;">
+      Run time {{approx_runtime}}.
+    </div>
   </div>
-
-
 
   <div class="footer">
     <div class="container">

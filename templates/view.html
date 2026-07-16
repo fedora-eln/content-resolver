@@ -34,15 +34,15 @@ dependency
 
 {% macro pkg_why(pkg) -%}
 {% if pkg.in_workload_ids_env %}
-<span class="badge badge-warning">Environment</span>
+<span class="badge text-bg-warning">Environment</span>
 {% elif pkg.in_workload_ids_req %}
-<span class="badge badge-success">Required</span>
+<span class="badge text-bg-success">Required</span>
 {% elif pkg.in_workload_ids_dep %}
-<span class="badge badge-secondary">Dependency</span>
+<span class="badge text-bg-secondary">Dependency</span>
 {% elif pkg.in_buildroot_of_srpm_id_env %}
-<span class="badge badge-secondary" style="background-color: #a39e87">Base Buildroot</span>
+<span class="badge text-bg-secondary" style="background-color: #a39e87">Base Buildroot</span>
 {% elif pkg.in_buildroot_of_srpm_id_req or pkg.in_buildroot_of_srpm_id_dep %}
-<span class="badge badge-secondary" style="background-color: #999">Buildroot level {{pkg.level_number}}</span>
+<span class="badge text-bg-secondary" style="background-color: #999">Buildroot level {{pkg.level_number}}</span>
 {% else %}
 (unknown)
 {% endif %}

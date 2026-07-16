@@ -61,9 +61,8 @@ def main():
 
     settings = config_manager.settings
 
-    settings["global_refresh_time_started"] = datetime.datetime.now().strftime("%-d %B %Y %H:%M UTC")
-
-
+    start_datetime = datetime.datetime.now()
+    settings["global_refresh_time_started"] = start_datetime.strftime("%-d %B %Y %H:%M UTC")
 
     if settings["use_cache"]:
         configs = load_data("cache_configs.json")
@@ -87,8 +86,13 @@ def main():
     # Stage 2: Generating pages and data outputs
     # -------------------------------------------------
 
-    query = Query(data, configs, settings)
+    # Calculate runtime
+    runtime_delta = datetime.datetime.now() - start_datetime
+    hours = runtime_delta.seconds // 3600
+    minutes = (runtime_delta.seconds % 3600) // 60
+    settings["approx_runtime"] = f"{hours}-hr - {minutes} mins" if hours > 0 else f"{minutes} mins"
 
+    query = Query(data, configs, settings)
     generate_pages(query)
     generate_data_files(query)
     generate_historic_data(query)

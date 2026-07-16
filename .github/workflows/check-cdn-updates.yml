@@ -1,13 +1,13 @@
 name: Check CDN Updates
 
 on:
-#  schedule:
-#    # Run every Monday at 9 AM UTC (disabled on forks)
-#    - cron: '0 9 * * 1'
+  schedule:
+    # Run every Monday at 9 AM UTC (disabled on forks)
+    - cron: '0 9 * * 1'
   workflow_dispatch:  # Allow manual triggering
   push:
     branches:
-      - 'feature/*'
+      - 'feature/*'  # Requires a feature branch
 #    paths:
 #      - 'templates/layout.html'
 #      - '.github/workflows/check-cdn-updates.yml'
