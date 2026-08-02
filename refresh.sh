@@ -42,7 +42,7 @@ echo ""
 echo "Building..."
 echo "$build_started"
 echo "(Logging into ~/logs/$build_started.log)"
-CMD="./content_resolver.py --labels eln,eln-extras --dnf-cache-dir /dnf_cachedir content-resolver-input/configs out" || exit 1
+CMD="./content_resolver.py --labels eln,eln-extensions,eln-extras --dnf-cache-dir /dnf_cachedir content-resolver-input/configs out" || exit 1
 podman run --rm -it --tmpfs /dnf_cachedir -v $WORK_DIR/content-resolver:/workspace:z localhost/asamalik/fedora-env $CMD > ~/logs/$build_started.log || exit 1
 
 # Save the root log cache
