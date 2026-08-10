@@ -15,7 +15,10 @@ def _save_current_historic_data(query):
     # Where to save it
     year = datetime.datetime.now().strftime("%Y")
     week = datetime.datetime.now().strftime("%W")
-    filename = f"historic_data-{year}-week_{week}.json"
+    filename = "historic_data-{year}-week_{week}.json".format(
+        year=year,
+        week=week
+    )
     output_dir = os.path.join(query.settings["output"], "history")
     os.makedirs(output_dir, exist_ok=True)
     file_path = os.path.join(output_dir, filename)
@@ -81,7 +84,9 @@ def _save_current_historic_data(query):
             history_data["views"][view_conf_id]["srpm_count_build_level_2_plus"] = view_all_arches["numbers"]["srpms"]["build_level_2_plus"]
 
     # And save it
-    log(f"  Saving in: {file_path}")
+    log("  Saving in: {file_path}".format(
+        file_path=file_path
+    ))
     dump_data(file_path, history_data)
 
     log("  Done!")
@@ -112,14 +117,22 @@ def _read_historic_data(query):
                 date = datetime.datetime.strptime(document["date"],"%Y-%m-%d")
                 year = date.strftime("%Y")
                 week = date.strftime("%W")
-                key = f"{year}-week_{week}"
+                key = "{year}-week_{week}".format(
+                    year=year,
+                    week=week
+                )
             except (KeyError, ValueError):
-                err_log(f"Invalid file in historic data: {filename}. Ignoring.")
+                err_log("Invalid file in historic data: {filename}. Ignoring.".format(
+                    filename=filename
+                ))
                 continue
 
             historic_data[key] = document
 
     return historic_data
+
+    log("  Done!")
+    log("")
 
 
 def _generate_chartjs_data(historic_data, query):
@@ -159,7 +172,9 @@ def _generate_chartjs_data(historic_data, query):
 
         entry_data["datasets"].append(dataset)
 
-        entry_name = f"chartjs-data--workload--{workload_id}"
+        entry_name = "chartjs-data--workload--{workload_id}".format(
+            workload_id=workload_id
+        )
         _generate_json_file(entry_data, entry_name, query.settings)
     
     # Data for workload overview pages
@@ -204,7 +219,10 @@ def _generate_chartjs_data(historic_data, query):
 
                 entry_data["datasets"].append(dataset)
 
-            entry_name = f"chartjs-data--workload-overview--{workload_conf_id}--{repo_id}"
+            entry_name = "chartjs-data--workload-overview--{workload_conf_id}--{repo_id}".format(
+                workload_conf_id=workload_conf_id,
+                repo_id=repo_id
+            )
             _generate_json_file(entry_data, entry_name, query.settings)
     
     # Data for workload cmp arches pages
@@ -252,7 +270,11 @@ def _generate_chartjs_data(historic_data, query):
 
                     entry_data["datasets"].append(dataset)
 
-                entry_name = f"chartjs-data--workload-cmp-arches--{workload_conf_id}--{env_conf_id}--{repo_id}"
+                entry_name = "chartjs-data--workload-cmp-arches--{workload_conf_id}--{env_conf_id}--{repo_id}".format(
+                    workload_conf_id=workload_conf_id,
+                    env_conf_id=env_conf_id,
+                    repo_id=repo_id
+                )
                 _generate_json_file(entry_data, entry_name, query.settings)
     
     # Data for workload cmp envs pages
@@ -300,7 +322,11 @@ def _generate_chartjs_data(historic_data, query):
 
                     entry_data["datasets"].append(dataset)
 
-                entry_name = f"chartjs-data--workload-cmp-envs--{workload_conf_id}--{repo_id}--{arch}"
+                entry_name = "chartjs-data--workload-cmp-envs--{workload_conf_id}--{repo_id}--{arch}".format(
+                    workload_conf_id=workload_conf_id,
+                    repo_id=repo_id,
+                    arch=arch
+                )
                 _generate_json_file(entry_data, entry_name, query.settings)
     
     # Data for env pages
@@ -339,7 +365,9 @@ def _generate_chartjs_data(historic_data, query):
 
         entry_data["datasets"].append(dataset)
 
-        entry_name = f"chartjs-data--env--{env_id}"
+        entry_name = "chartjs-data--env--{env_id}".format(
+            env_id=env_id
+        )
         _generate_json_file(entry_data, entry_name, query.settings)
     
     # Data for env overview pages
@@ -384,7 +412,10 @@ def _generate_chartjs_data(historic_data, query):
 
                 entry_data["datasets"].append(dataset)
 
-            entry_name = f"chartjs-data--env-overview--{env_conf_id}--{repo_id}"
+            entry_name = "chartjs-data--env-overview--{env_conf_id}--{repo_id}".format(
+                env_conf_id=env_conf_id,
+                repo_id=repo_id
+            )
             _generate_json_file(entry_data, entry_name, query.settings)
     
     # Data for env cmp arches pages
@@ -429,7 +460,10 @@ def _generate_chartjs_data(historic_data, query):
 
                 entry_data["datasets"].append(dataset)
 
-            entry_name = f"chartjs-data--env-cmp-arches--{env_conf_id}--{repo_id}"
+            entry_name = "chartjs-data--env-cmp-arches--{env_conf_id}--{repo_id}".format(
+                env_conf_id=env_conf_id,
+                repo_id=repo_id
+            )
             _generate_json_file(entry_data, entry_name, query.settings)
     
     # Data for view pages 
@@ -448,9 +482,21 @@ def _generate_chartjs_data(historic_data, query):
         # Second, get the actual data for everything that's needed
         entry_data["datasets"] = []
 
-        dataset_names = ["env", "req", "dep"]
         if view_all_arches["has_buildroot"]:
-            dataset_names.extend(["build_base", "build_level_1", "build_level_2_plus"])
+            dataset_names = [
+                "env",
+                "req",
+                "dep",
+                "build_base",
+                "build_level_1",
+                "build_level_2_plus"
+            ]
+        else:
+            dataset_names = [
+                "env",
+                "req",
+                "dep"
+            ]
 
         dataset_metadata = {
             "env": {
@@ -506,7 +552,9 @@ def _generate_chartjs_data(historic_data, query):
 
             entry_data["datasets"].append(dataset)
 
-        entry_name = f"chartjs-data--view--{view_conf_id}"
+        entry_name = "chartjs-data--view--{view_conf_id}".format(
+            view_conf_id=view_conf_id
+        )
         _generate_json_file(entry_data, entry_name, query.settings)
 
 
