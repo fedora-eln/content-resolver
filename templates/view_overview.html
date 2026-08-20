@@ -19,9 +19,59 @@
 
                 <div class="card border-secondary w-100">
                     <div class="card-body">
-                        <canvas id="chLine"></canvas>
+                        <canvas id="chLine" height="300"></canvas>
                     </div>
                 </div>
+
+                <!-- Week/Day toggle -->
+                <div class="d-flex justify-content-center">
+                    <div class="btn-group btn-group-sm mt-2" role="group">
+                        <button type="button" class="btn btn-lg btn-outline-secondary active" id="chart-toggle-weekly">Weekly</button>
+                        <button type="button" class="btn btn-lg btn-outline-secondary" id="chart-toggle-daily">Daily</button>
+                    </div>
+                </div>
+
+                <hr>
+
+                <!-- Browse by date -->
+                <div class="mb-3">
+                    <label for="browse-date">Browse package lists by date</label>
+                    <input type="text" class="form-control form-control-sm" id="browse-date" placeholder="Select a date...">
+                </div>
+
+                <!-- Package lists revealed by clicking chart or browse picker -->
+                <div id="historic-pkg-lists" class="mt-3"></div>
+
+                <hr>
+
+                <!-- Compare two dates -->
+                <div class="mb-3">
+                    <label>Compare two dates</label>
+                    <div class="row g-2">
+                        <div class="col">
+                            <input type="text" class="form-control form-control-sm" id="compare-date-a" placeholder="Date A...">
+                        </div>
+                        <div class="col">
+                            <input type="text" class="form-control form-control-sm" id="compare-date-b" placeholder="Date B...">
+                        </div>
+                        <div class="col-auto">
+                            <select class="form-control form-control-sm" id="compare-field">
+                                <option value="all_source_names">All — Names</option>
+                                <option value="all_source_nevrs">All — NEVRs</option>
+                                <option value="runtime_source_names">Runtime — Names</option>
+                                <option value="runtime_source_nevrs">Runtime — NEVRs</option>
+                                <option value="buildroot_source_names">Buildroot — Names</option>
+                                <option value="buildroot_source_nevrs">Buildroot — NEVRs</option>
+                            </select>
+                        </div>
+                        <div class="col-auto">
+                            <button class="btn btn-sm btn-outline-secondary" id="compare-btn">Compare</button>
+                            <button class="btn btn-sm btn-outline-danger has-text-danger" id="compare-reset-btn">Reset</button>
+                        </div>
+                    </div>
+                </div>
+                <div id="compare-results"></div>
+
                 <hr>
 
                 <div class="card border-secondary">
@@ -434,52 +484,289 @@
 </div>
 
 <script>
+    // Global variable (used by onclick attributes)
+    var currentViewData = null;
+
     $(document).ready(function () {
+        // Initialize chart
+        var currentChart = null;
+        // Convert the Python dict to JSON
+        const dailyDates = {{ historic_daily_dates | tojson }};
 
-        function plot_graph(chartData) {
-            const chLine = document.getElementById("chLine");
-            if (chLine) {
-                // Add fill to each dataset with transparency
-                chartData.datasets.forEach(function(dataset) {
-                    dataset.fill = true;
-                });
+        // Initialize calendar date picker 
+        // Only dates that have snapshots available are selectable
+        const availableDates = Object.keys(dailyDates);
+        var browsePicker = null;
+        var comparePickerA = null;
+        var comparePickerB = null;
 
-                new Chart(chLine, {
-                    type: 'line',
-                    data: chartData,
-                    options: {
-                        scales: {
-                            y: {
-                                beginAtZero: true,
-                                ticks: {
-                                    callback: function (value, index, values) {
-                                        return value + " SRPMs";
-                                    }
-                                }
-                            }
-                        },
-                        plugins: {
-                            legend: {
-                                display: true
-                            }
-                        },
-                        spanGaps: true,
-                        maintainAspectRatio: false,
-                        elements: {
-                            line: {
-                                tension: 0
-                            }
-                        }
+        if (typeof flatpickr !== 'undefined') {
+            // Browse by date
+            browsePicker = flatpickr('#browse-date', {
+                enable: availableDates,
+                dateFormat: 'Y-m-d',
+                onChange: function(selectedDates, dateStr) {
+                    if (!dateStr) {
+                        document.getElementById('historic-pkg-lists').innerHTML = '';
+                        return;
                     }
-                });
-            }
+                    // Load the package lists for the selected date
+                    loadSnapshotForDate(dateStr);
+                }
+            });
+
+            // Compare two dates
+            comparePickerA = flatpickr('#compare-date-a', {
+                enable: availableDates,
+                dateFormat: 'Y-m-d'
+            });
+
+            comparePickerB = flatpickr('#compare-date-b', {
+                enable: availableDates,
+                dateFormat: 'Y-m-d'
+            });
         }
 
+        // Plot the graph (weekly or daily)
+        function plot_graph(chartData) {
+            // Get the chart container
+            const chLine = document.getElementById("chLine");
+            if (!chLine) return;
+
+            // If a chart exists, destroy it
+            if (currentChart) currentChart.destroy();
+
+            // Add fill to each dataset with transparency
+            chartData.datasets.forEach(function(dataset) {
+                dataset.fill = true;
+            });
+
+            // Create a new chart
+            currentChart = new Chart(chLine, {
+                type: 'line',
+                data: chartData,
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function (value, index, values) {
+                                    return value + " SRPMs";
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: true
+                        }
+                    },
+                    spanGaps: true,
+                    maintainAspectRatio: false,
+                    elements: {
+                        line: {
+                            tension: 0
+                        }
+                    },
+                    onClick: function(evt, elements, chart) {
+                        const points = chart.getElementsAtEventForMode(evt, 'nearest', { intersect: true }, false);
+                        // Clicking any part of the empty chart area clears the package lists display and resets the date picker
+                        if (points.length === 0) {
+                            document.getElementById('historic-pkg-lists').innerHTML = '';
+                            if (browsePicker) browsePicker.clear();
+                            return;
+                        }
+                        // Clicking on a chart dot displays the package lists for the selected date
+                        const index = points[0].index;
+                        const date = chartData.labels[index];
+                        // Sync the browse by date date picker to the clicked date
+                        if (browsePicker) browsePicker.setDate(date);
+                        loadSnapshotForDate(date);
+                    }
+                }
+            });
+        }
+        
+        // Fetch a daily snapshot by date and display its package lists
+        function loadSnapshotForDate(date) {
+            // Look up filename from the date-to-filename map
+            var filename = dailyDates[date];
+            if (!filename) return;
+
+            // Fetch the snapshot
+            axios.get('history/' + filename)
+                .then(function(response) {
+                    // Extract this view's data from the snapshot
+                    var viewData = response.data.views['{{view_conf.id}}'];
+                    if (!viewData) return;
+                    displayPackageLists(date, viewData);
+                });
+        }
+
+        // Build HTML table for package lists
+        function displayPackageLists(date, viewData) {
+            currentViewData = viewData;
+            var container = document.getElementById('historic-pkg-lists');
+            var html = '<h5 class="card-title text-center">Package Lists for ' + date + '</h5>' + '<hr>';
+
+            var sections = [
+                {label: 'All', nameKey: 'all_source_names', nevrKey: 'all_source_nevrs'},
+                {label: 'Runtime', nameKey: 'runtime_source_names', nevrKey: 'runtime_source_nevrs'},
+                {label: 'Buildroot-only', nameKey: 'buildroot_source_names', nevrKey: 'buildroot_source_nevrs'},
+            ];
+
+            html += '<div class="card border-secondary">';
+            html += '<table class="table table-sm text-center table-downloads" style="margin-bottom:0">';
+            html += '<tbody>';
+
+            sections.forEach(function(section) {
+                var names = viewData[section.nameKey];
+                var nevrs = viewData[section.nevrKey];
+                if (!names && !nevrs) return;
+
+                // Names
+                html += '<tr>';
+                html += '<td rowspan=2 class="align-middle"> ' + section.label + ' </td>';
+                html += '<td rowspan=2 class="align-middle"> SRPM </td>';
+                html += '<td> Names </td>';
+                html += '<td>';
+                if (names) {
+                    // "All Arches" opens as plain text in a new tab
+                    html += '<a class="card-link" href="#" '
+                         +  'onclick="viewTxt(currentViewData[\'' + section.nameKey + '\']); return false;">'
+                         +  'All Arches</a> (' + names.length + ') ';
+                    // "Download .txt" triggers a file download
+                    html += '<a class="card-link" href="#" '
+                         +  'onclick="downloadTxt(\'' + section.nameKey + '--' + date + '\', '
+                         +  'currentViewData[\'' + section.nameKey + '\']); return false;">'
+                         +  'Download .txt</a>';
+                }
+                html += '</td>';
+                html += '</tr>';
+
+                // NEVRs
+                html += '<tr>';
+                html += '<td> NEVRs </td>';
+                html += '<td>';
+                if (nevrs) {
+                    html += '<a class="card-link" href="#" '
+                         +  'onclick="viewTxt(currentViewData[\'' + section.nevrKey + '\']); return false;">'
+                         +  'All Arches</a> (' + nevrs.length + ') ';
+                    html += '<a class="card-link" href="#" '
+                         +  'onclick="downloadTxt(\'' + section.nevrKey + '--' + date + '\', '
+                         +  'currentViewData[\'' + section.nevrKey + '\']); return false;">'
+                         +  'Download .txt</a>';
+                }
+                html += '</td>';
+                html += '</tr>';
+            });
+
+            html += '</tbody></table></div>';
+            
+            // Replace any previous package list display
+            container.innerHTML = html;
+        }
+
+        // Compare package lists for two dates and show the set difference
+        function displayComparison(dateA, dateB, viewA, viewB) {
+            // Get the selected package list type from the dropdown
+            var field = document.getElementById('compare-field').value;
+            var setA = new Set(viewA[field] || []);
+            var setB = new Set(viewB[field] || []);
+
+            // Compute set differences
+            var onlyInA = [...setA].filter(function(x) { return !setB.has(x); }).sort();
+            var onlyInB = [...setB].filter(function(x) { return !setA.has(x); }).sort();
+            var inBoth = [...setA].filter(function(x) { return setB.has(x); }).sort();
+
+            // Display results
+            var container = document.getElementById('compare-results');
+            container.innerHTML =
+                '<div class="text-center">'
+                + '<div class="card border-secondary">'
+                + '<div class="card-body">'
+                + '<div class="row align-items-center">'
+                + '<div class="col-6">'
+                +'<h6>Only in ' + dateA + ' (' + onlyInA.length + ')</h6>'
+                + '<pre>' + onlyInA.join('\n') + '</pre>'
+                + '</div>'
+                + '<div class="col-6">'
+                + '<h6>Only in ' + dateB + ' (' + onlyInB.length + ')</h6>'
+                + '<pre>' + onlyInB.join('\n') + '</pre>'
+                + '</div>'
+                + '<div class="col align-self-center">'
+                + '<h6>In Both (' + inBoth.length + ')</h6>'
+                + '<pre>' + inBoth.join('\n') + '</pre>'
+                + '</div>'
+                + '</div>'
+                + '</div>'
+                + '</div>';
+        }
+
+        // Chart toggle - toggle between weekly and daily chart data
+        // Weekly - load weekly chart data
+        document.getElementById('chart-toggle-weekly').addEventListener('click', function() {
+            this.classList.add('active');
+            document.getElementById('chart-toggle-daily').classList.remove('active');
+            axios.get('chartjs-data--view--{{view_conf.id}}.json')
+                .then(function(response) { plot_graph(response.data); });
+        });
+
+        // Daily - load daily chart data
+        document.getElementById('chart-toggle-daily').addEventListener('click', function() {
+            this.classList.add('active');
+            document.getElementById('chart-toggle-weekly').classList.remove('active');
+            axios.get('chartjs-data-daily--view--{{view_conf.id}}.json')
+                .then(function(response) { plot_graph(response.data); });
+        });
+
+        // Compare two dates — fetch both snapshots, then show the set difference
+        document.getElementById('compare-btn').addEventListener('click', function() {
+            var dateA = document.getElementById('compare-date-a').value;
+            var dateB = document.getElementById('compare-date-b').value;
+            if (!dateA || !dateB || !dailyDates[dateA] || !dailyDates[dateB]) return;
+
+            Promise.all([
+                axios.get('history/' + dailyDates[dateA]),
+                axios.get('history/' + dailyDates[dateB])
+            ]).then(function(responses) {
+                var viewA = responses[0].data.views['{{view_conf.id}}'];
+                var viewB = responses[1].data.views['{{view_conf.id}}'];
+                if (!viewA || !viewB) return;
+                displayComparison(dateA, dateB, viewA, viewB);
+            });
+        });
+
+        // Reset compare — reset compare date pickers and results to default state
+        document.getElementById('compare-reset-btn').addEventListener('click', function() {
+            if (comparePickerA) comparePickerA.clear();
+            if (comparePickerB) comparePickerB.clear();
+            document.getElementById('compare-field').selectedIndex = 0;
+            document.getElementById('compare-results').innerHTML = '';
+        });
+
+        // Load weekly chart data by default
         axios.get(`chartjs-data--view--{{view_conf.id}}.json`)
             .then(response => {
                 plot_graph(response.data)
             })
     });
+
+    // Utility functions (used by onclick attributes)
+    // View text — open a new tab with the list data
+    function viewTxt(data) {
+        var blob = new Blob([data.join('\n')], {type: 'text/plain'});
+        window.open(URL.createObjectURL(blob));
+    }
+
+    // Download text — download the list data to a .txt file
+    function downloadTxt(name, data) {
+        var blob = new Blob([data.join('\n')], {type: 'text/plain'});
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = name + '.txt';
+        a.click();
+    }
 </script>
 
 

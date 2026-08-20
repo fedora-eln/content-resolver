@@ -457,6 +457,15 @@ def parse_layout_html(file_path: str) -> Tuple[Dict[str, str], Dict[str, List[st
                     urls["axios"] = []
                 urls["axios"].append(url)
 
+        # Flatpickr
+        elif "flatpickr" in url_lower:
+            version = extract_version_from_url(url, "flatpickr")
+            if version:
+                if "flatpickr" not in versions:
+                    versions["flatpickr"] = version
+                    urls["flatpickr"] = []
+                urls["flatpickr"].append(url)
+
     return versions, urls
 
 
