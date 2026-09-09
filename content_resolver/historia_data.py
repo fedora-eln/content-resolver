@@ -92,6 +92,7 @@ def _save_current_historic_data(query):
     log("  Done!")
     log("")
 
+
 def _save_current_historic_data_daily(query):
     # Daily historic data for charts and package lists
 
@@ -220,6 +221,7 @@ def _save_current_historic_data_daily(query):
     log("  Done!")
     log("")
 
+
 def _read_historic_data(query):
     log("Reading historic data...")
 
@@ -261,6 +263,7 @@ def _read_historic_data(query):
     log("  Done!")
     log("")
 
+
 def _read_historic_data_daily(query):
     # Read all daily snapshot files from output/history/
 
@@ -298,6 +301,7 @@ def _read_historic_data_daily(query):
     log("")
 
     return historic_data_daily
+
 
 def _generate_chartjs_data(historic_data, query):
 
@@ -721,6 +725,7 @@ def _generate_chartjs_data(historic_data, query):
         )
         _generate_json_file(entry_data, entry_name, query.settings)
 
+
 def _merge_weekly_and_daily(historic_data_weekly, historic_data_daily):
 
     # Merge weekly and daily historic data as one continuous series for the chart
@@ -735,6 +740,7 @@ def _merge_weekly_and_daily(historic_data_weekly, historic_data_daily):
     merged.update(historic_data_daily)
 
     return dict(sorted(merged.items()))
+
 
 def generate_historic_data(query):
     log("")
