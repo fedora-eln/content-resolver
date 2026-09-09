@@ -23,14 +23,6 @@
                     </div>
                 </div>
 
-                <!-- Week/Day toggle -->
-                <div class="d-flex justify-content-center">
-                    <div class="btn-group btn-group-sm mt-2" role="group">
-                        <button type="button" class="btn btn-lg btn-outline-secondary active" id="chart-toggle-weekly">Weekly</button>
-                        <button type="button" class="btn btn-lg btn-outline-secondary" id="chart-toggle-daily">Daily</button>
-                    </div>
-                </div>
-
                 <hr>
 
                 <!-- Browse by date -->
@@ -527,7 +519,7 @@
             });
         }
 
-        // Plot the graph (weekly or daily)
+        // Plot the graph
         function plot_graph(chartData) {
             // Get the chart container
             const chLine = document.getElementById("chLine");
@@ -720,23 +712,6 @@
                 + '</div>';
         }
 
-        // Chart toggle - toggle between weekly and daily chart data
-        // Weekly - load weekly chart data
-        document.getElementById('chart-toggle-weekly').addEventListener('click', function() {
-            this.classList.add('active');
-            document.getElementById('chart-toggle-daily').classList.remove('active');
-            axios.get('chartjs-data--view--{{view_conf.id}}.json')
-                .then(function(response) { plot_graph(response.data); });
-        });
-
-        // Daily - load daily chart data
-        document.getElementById('chart-toggle-daily').addEventListener('click', function() {
-            this.classList.add('active');
-            document.getElementById('chart-toggle-weekly').classList.remove('active');
-            axios.get('chartjs-data-daily--view--{{view_conf.id}}.json')
-                .then(function(response) { plot_graph(response.data); });
-        });
-
         // Compare two dates — fetch both snapshots, then show the set difference
         document.getElementById('compare-btn').addEventListener('click', function() {
             var dateA = document.getElementById('compare-date-a').value;
@@ -765,7 +740,7 @@
             document.getElementById('compare-results').innerHTML = '';
         });
 
-        // Load weekly chart data by default
+        // Load chart data
         axios.get(`chartjs-data--view--{{view_conf.id}}.json`)
             .then(response => {
                 plot_graph(response.data)

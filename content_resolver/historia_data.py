@@ -299,7 +299,7 @@ def _read_historic_data_daily(query):
 
     return historic_data_daily
 
-def _generate_chartjs_data(historic_data, query, prefix=""):
+def _generate_chartjs_data(historic_data, query):
 
     # Data for workload pages
     for workload_id in query.workloads(None, None, None, None, list_all=True):
@@ -336,8 +336,7 @@ def _generate_chartjs_data(historic_data, query, prefix=""):
 
         entry_data["datasets"].append(dataset)
 
-        entry_name = "chartjs-data{prefix}--workload--{workload_id}".format(
-            prefix=prefix,
+        entry_name = "chartjs-data--workload--{workload_id}".format(
             workload_id=workload_id
         )
         _generate_json_file(entry_data, entry_name, query.settings)
@@ -384,8 +383,7 @@ def _generate_chartjs_data(historic_data, query, prefix=""):
 
                 entry_data["datasets"].append(dataset)
 
-            entry_name = "chartjs-data{prefix}--workload-overview--{workload_conf_id}--{repo_id}".format(
-                prefix=prefix,
+            entry_name = "chartjs-data--workload-overview--{workload_conf_id}--{repo_id}".format(
                 workload_conf_id=workload_conf_id,
                 repo_id=repo_id
             )
@@ -436,8 +434,7 @@ def _generate_chartjs_data(historic_data, query, prefix=""):
 
                     entry_data["datasets"].append(dataset)
 
-                entry_name = "chartjs-data{prefix}--workload-cmp-arches--{workload_conf_id}--{env_conf_id}--{repo_id}".format(
-                    prefix=prefix,
+                entry_name = "chartjs-data--workload-cmp-arches--{workload_conf_id}--{env_conf_id}--{repo_id}".format(
                     workload_conf_id=workload_conf_id,
                     env_conf_id=env_conf_id,
                     repo_id=repo_id
@@ -489,8 +486,7 @@ def _generate_chartjs_data(historic_data, query, prefix=""):
 
                     entry_data["datasets"].append(dataset)
 
-                entry_name = "chartjs-data{prefix}--workload-cmp-envs--{workload_conf_id}--{repo_id}--{arch}".format(
-                    prefix=prefix,
+                entry_name = "chartjs-data--workload-cmp-envs--{workload_conf_id}--{repo_id}--{arch}".format(
                     workload_conf_id=workload_conf_id,
                     repo_id=repo_id,
                     arch=arch
@@ -533,8 +529,7 @@ def _generate_chartjs_data(historic_data, query, prefix=""):
 
         entry_data["datasets"].append(dataset)
 
-        entry_name = "chartjs-data{prefix}--env--{env_id}".format(
-            prefix=prefix,
+        entry_name = "chartjs-data--env--{env_id}".format(
             env_id=env_id
         )
         _generate_json_file(entry_data, entry_name, query.settings)
@@ -581,8 +576,7 @@ def _generate_chartjs_data(historic_data, query, prefix=""):
 
                 entry_data["datasets"].append(dataset)
 
-            entry_name = "chartjs-data{prefix}--env-overview--{env_conf_id}--{repo_id}".format(
-                prefix=prefix,
+            entry_name = "chartjs-data--env-overview--{env_conf_id}--{repo_id}".format(
                 env_conf_id=env_conf_id,
                 repo_id=repo_id
             )
@@ -630,8 +624,7 @@ def _generate_chartjs_data(historic_data, query, prefix=""):
 
                 entry_data["datasets"].append(dataset)
 
-            entry_name = "chartjs-data{prefix}--env-cmp-arches--{env_conf_id}--{repo_id}".format(
-                prefix=prefix,
+            entry_name = "chartjs-data--env-cmp-arches--{env_conf_id}--{repo_id}".format(
                 env_conf_id=env_conf_id,
                 repo_id=repo_id
             )
@@ -723,11 +716,25 @@ def _generate_chartjs_data(historic_data, query, prefix=""):
 
             entry_data["datasets"].append(dataset)
 
-        entry_name = "chartjs-data{prefix}--view--{view_conf_id}".format(
-            prefix=prefix,
+        entry_name = "chartjs-data--view--{view_conf_id}".format(
             view_conf_id=view_conf_id
         )
         _generate_json_file(entry_data, entry_name, query.settings)
+
+def _merge_weekly_and_daily(historic_data_weekly, historic_data_daily):
+
+    # Merge weekly and daily historic data as one continuous series for the chart
+    
+    merged = {}
+
+    for entry in historic_data_weekly.values():
+        # Keyed by date (not "YYYY-week_WW"), so both sort together
+        merged[entry["date"]] = entry
+
+    # Daily counts take priority (replaces any weekly snapshot sharing the same date)
+    merged.update(historic_data_daily)
+
+    return dict(sorted(merged.items()))
 
 def generate_historic_data(query):
     log("")
@@ -741,12 +748,12 @@ def generate_historic_data(query):
     _save_current_historic_data_daily(query)
 
     # Step 2: Read historic data
-    historic_data = _read_historic_data(query)
+    historic_data_weekly = _read_historic_data(query)
     historic_data_daily = _read_historic_data_daily(query)
+    historic_data = _merge_weekly_and_daily(historic_data_weekly, historic_data_daily)
 
     # Step 3: Generate Chart.js data
     _generate_chartjs_data(historic_data, query)
-    _generate_chartjs_data(historic_data_daily, query, prefix="-daily")
 
     # Date-to-filename map for the browser to fetch daily snapshots
     query.data["historic_daily_dates"] = {
