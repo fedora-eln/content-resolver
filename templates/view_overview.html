@@ -586,12 +586,23 @@
                 }
             });
         }
-        
+
+        // Show a message in the container
+        function showMessage(containerId, text) {
+            document.getElementById(containerId).innerHTML =
+                '<p class="text-center text-muted">' + text + '</p>';
+        }
+
         // Fetch a daily snapshot by date and display its package lists
         function loadSnapshotForDate(date) {
             // Look up filename from the date-to-filename map
             var filename = dailyDates[date];
-            if (!filename) return;
+            // Not every date has a package list available
+            if (!filename) {
+                if (browsePicker) browsePicker.clear(false);
+                showMessage('historic-pkg-lists', 'No package lists available for ' + date + '.');
+                return;
+            }
 
             // Fetch the snapshot
             axios.get('history/' + filename)
@@ -600,6 +611,9 @@
                     var viewData = response.data.views['{{view_conf.id}}'];
                     if (!viewData) return;
                     displayPackageLists(date, viewData);
+                })
+                .catch(function() {
+                    showMessage('historic-pkg-lists', 'Error loading package lists for ' + date + '.');
                 });
         }
 
@@ -622,7 +636,6 @@
             sections.forEach(function(section) {
                 var names = viewData[section.nameKey];
                 var nevrs = viewData[section.nevrKey];
-                if (!names && !nevrs) return;
 
                 // Names
                 html += '<tr>';
@@ -630,7 +643,7 @@
                 html += '<td rowspan=2 class="align-middle"> SRPM </td>';
                 html += '<td> Names </td>';
                 html += '<td>';
-                if (names) {
+                if (names && names.length > 0) {
                     // "All Arches" opens as plain text in a new tab
                     html += '<a class="card-link" href="#" '
                          +  'onclick="viewTxt(currentViewData[\'' + section.nameKey + '\']); return false;">'
@@ -640,6 +653,8 @@
                          +  'onclick="downloadTxt(\'' + section.nameKey + '--' + date + '\', '
                          +  'currentViewData[\'' + section.nameKey + '\']); return false;">'
                          +  'Download .txt</a>';
+                } else {
+                    html += '<span class="text-muted">None</span>';
                 }
                 html += '</td>';
                 html += '</tr>';
@@ -648,7 +663,7 @@
                 html += '<tr>';
                 html += '<td> NEVRs </td>';
                 html += '<td>';
-                if (nevrs) {
+                if (nevrs && nevrs.length > 0) {
                     html += '<a class="card-link" href="#" '
                          +  'onclick="viewTxt(currentViewData[\'' + section.nevrKey + '\']); return false;">'
                          +  'All Arches</a> (' + nevrs.length + ') ';
@@ -656,6 +671,8 @@
                          +  'onclick="downloadTxt(\'' + section.nevrKey + '--' + date + '\', '
                          +  'currentViewData[\'' + section.nevrKey + '\']); return false;">'
                          +  'Download .txt</a>';
+                } else {
+                    html += '<span class="text-muted">None</span>';
                 }
                 html += '</td>';
                 html += '</tr>';
@@ -734,6 +751,9 @@
                 var viewB = responses[1].data.views['{{view_conf.id}}'];
                 if (!viewA || !viewB) return;
                 displayComparison(dateA, dateB, viewA, viewB);
+            })
+            .catch(function() {
+                showMessage('compare-results', 'Could not load package lists for ' + dateA + ' and ' + dateB + '.');
             });
         });
 
