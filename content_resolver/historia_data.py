@@ -94,7 +94,8 @@ def _save_current_historic_data(query):
 
 
 def _save_current_historic_data_daily(query):
-    # Daily historic data for charts and package lists
+    # Daily historic data for charts
+    # Package lists are saved separately by _save_current_historic_data_daily_pkgs
 
     log("Generating current daily historic data...")
 
@@ -163,7 +164,6 @@ def _save_current_historic_data_daily(query):
     for view_conf_id, view_conf in query.configs["views"].items():
         view_all_arches = query.data["views_all_arches"][view_conf_id]
 
-        # Chart metrics
         view_data = {
             "srpm_count_env": view_all_arches["numbers"]["srpms"]["env"],
             "srpm_count_req": view_all_arches["numbers"]["srpms"]["req"],
@@ -175,7 +175,46 @@ def _save_current_historic_data_daily(query):
             view_data["srpm_count_build_level_1"] = view_all_arches["numbers"]["srpms"]["build_level_1"]
             view_data["srpm_count_build_level_2_plus"] = view_all_arches["numbers"]["srpms"]["build_level_2_plus"]
 
-        # Package lists — sets remove duplicates across arches
+        history_data["views"][view_conf_id] = view_data
+
+    # And save it
+    log("  Saving in: {file_path}".format(
+        file_path=file_path
+    ))
+    dump_data(file_path, history_data)
+
+    log("  Done!")
+    log("")
+
+
+def _save_current_historic_data_daily_pkgs(query):
+    # Daily package lists for browse and compare
+    # Kept separate from the daily counts so package list snapshots can be
+    # deleted for space, if needed, without impacting the chart data
+
+    log("Generating current daily package lists...")
+
+    # Where to save it
+    now = datetime.datetime.now()
+    day_of_year = now.strftime("%j")
+    year = now.strftime("%Y")
+    filename = "historic_data_pkgs-{year}-day_{day}.json".format(
+        year=year,
+        day=day_of_year
+    )
+    output_dir = os.path.join(query.settings["output"], "history")
+    os.makedirs(output_dir, exist_ok=True)
+    file_path = os.path.join(output_dir, filename)
+
+    # What to save there
+    history_pkgs = {
+        "date": str(now.strftime("%Y-%m-%d")),
+        "views": {},
+    }
+
+    for view_conf_id, view_conf in query.configs["views"].items():
+
+        # Sets remove duplicates across arches
         all_source_names = set()
         all_source_nevrs = set()
         runtime_source_names = set()
@@ -203,20 +242,22 @@ def _save_current_historic_data_daily(query):
                     buildroot_source_nevrs.add(source_nevr)
 
         # Sorted for consistent output
-        view_data["all_source_names"] = sorted(list(all_source_names))
-        view_data["all_source_nevrs"] = sorted(list(all_source_nevrs))
-        view_data["runtime_source_names"] = sorted(list(runtime_source_names))
-        view_data["runtime_source_nevrs"] = sorted(list(runtime_source_nevrs))
-        view_data["buildroot_source_names"] = sorted(list(buildroot_source_names))
-        view_data["buildroot_source_nevrs"] = sorted(list(buildroot_source_nevrs))
+        view_pkgs = {
+            "all_source_names": sorted(list(all_source_names)),
+            "all_source_nevrs": sorted(list(all_source_nevrs)),
+            "runtime_source_names": sorted(list(runtime_source_names)),
+            "runtime_source_nevrs": sorted(list(runtime_source_nevrs)),
+            "buildroot_source_names": sorted(list(buildroot_source_names)),
+            "buildroot_source_nevrs": sorted(list(buildroot_source_nevrs)),
+        }
 
-        history_data["views"][view_conf_id] = view_data
+        history_pkgs["views"][view_conf_id] = view_pkgs
 
     # And save it
     log("  Saving in: {file_path}".format(
         file_path=file_path
     ))
-    dump_data(file_path, history_data)
+    dump_data(file_path, history_pkgs)
 
     log("  Done!")
     log("")
@@ -294,13 +335,41 @@ def _read_historic_data_daily(query):
                 continue
 
             historic_data_daily[date] = document
-            # Store filename so the browser knows which file to fetch for this date
-            historic_data_daily[date]["_filename"] = filename
 
     log("  Done!")
     log("")
 
     return historic_data_daily
+
+
+def _list_historic_data_daily_pkgs_dates(query):
+    # Map date to filename for daily package list files
+    # Only the filenames are read, the browser fetches the contents later
+
+    directory = os.path.join(query.settings["output"], "history")
+
+    dates = {}
+
+    for filename in sorted(os.listdir(directory)):
+        match = re.match(r"historic_data_pkgs-(....)-day_(...)\.json", filename)
+        if not match:
+            continue
+
+        year, day_of_year = match.groups()
+
+        try:
+            date = datetime.datetime.strptime(
+                "{year}-{day}".format(year=year, day=day_of_year), "%Y-%j"
+            ).strftime("%Y-%m-%d")
+        except ValueError:
+            err_log("Invalid file in daily package lists: {filename}. Ignoring.".format(
+                filename=filename
+            ))
+            continue
+
+        dates[date] = filename
+
+    return dates
 
 
 def _generate_chartjs_data(historic_data, query):
@@ -750,8 +819,9 @@ def generate_historic_data(query):
     log("")
 
     # Step 1: Save current data
-    _save_current_historic_data(query)  
+    _save_current_historic_data(query)
     _save_current_historic_data_daily(query)
+    _save_current_historic_data_daily_pkgs(query)
 
     # Step 2: Read historic data
     historic_data_weekly = _read_historic_data(query)
@@ -761,10 +831,8 @@ def generate_historic_data(query):
     # Step 3: Generate Chart.js data
     _generate_chartjs_data(historic_data, query)
 
-    # Date-to-filename map for the browser to fetch daily snapshots
-    query.data["historic_daily_dates"] = {
-        date: entry["_filename"] for date, entry in historic_data_daily.items()
-    }
+    # Date to filename map for the browser to fetch package lists
+    query.data["historic_daily_dates"] = _list_historic_data_daily_pkgs_dates(query)
 
     log("Done!")
     log("")
