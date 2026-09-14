@@ -448,6 +448,15 @@ def parse_layout_html(file_path: str) -> Tuple[Dict[str, str], Dict[str, List[st
                     urls["chart.js"] = []
                 urls["chart.js"].append(url)
 
+        # Chart.js adapter
+        elif "chartjs-adapter-date-fns" in url_lower:
+            version = extract_version_from_url(url, "chartjs-adapter-date-fns")
+            if version:
+                if "chartjs-adapter-date-fns" not in versions:
+                    versions["chartjs-adapter-date-fns"] = version
+                    urls["chartjs-adapter-date-fns"] = []
+                urls["chartjs-adapter-date-fns"].append(url)
+
         # Axios
         elif "axios" in url_lower:
             version = extract_version_from_url(url, "axios")

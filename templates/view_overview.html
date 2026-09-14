@@ -485,7 +485,7 @@
         // Convert the Python dict to JSON
         const dailyDates = {{ historic_daily_dates | tojson }};
 
-        // Initialize calendar date picker 
+        // Initialize calendar date picker
         // Only dates that have snapshots available are selectable
         const availableDates = Object.keys(dailyDates);
         var browsePicker = null;
@@ -539,6 +539,14 @@
                 data: chartData,
                 options: {
                     scales: {
+                        // Scale weekly and daily points by date, not equal width
+                        x: {
+                            type: 'time',
+                            time: {
+                                unit: 'month',
+                                tooltipFormat: 'yyyy-MM-dd'
+                            }
+                        },
                         y: {
                             beginAtZero: true,
                             ticks: {
@@ -671,7 +679,7 @@
             });
 
             html += '</tbody></table></div>';
-            
+
             // Replace any previous package list display
             container.innerHTML = html;
         }
