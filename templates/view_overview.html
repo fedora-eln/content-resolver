@@ -615,7 +615,10 @@
                 .then(function(response) {
                     // Extract this view's data from the snapshot
                     var viewData = response.data.views['{{view_conf.id}}'];
-                    if (!viewData) return;
+                    if (!viewData) {
+                        showMessage('historic-pkg-lists', 'No data for this view in ' + date + '.');
+                        return;
+                    }
                     displayPackageLists(date, viewData);
                 })
                 .catch(function() {
@@ -757,7 +760,11 @@
             ]).then(function(responses) {
                 var viewA = responses[0].data.views['{{view_conf.id}}'];
                 var viewB = responses[1].data.views['{{view_conf.id}}'];
-                if (!viewA || !viewB) return;
+                if (!viewA || !viewB) {
+                    showMessage('compare-results', 
+                        'No data for this view in ' + (!viewA ? dateA : dateB) + '.');
+                    return;
+                }
                 displayComparison(dateA, dateB, viewA, viewB);
             })
             .catch(function() {
