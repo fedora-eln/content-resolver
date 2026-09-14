@@ -492,19 +492,21 @@
         var comparePickerA = null;
         var comparePickerB = null;
 
+        // Load the package lists for a selected date, or clear when the field is empty
+        function handleBrowseDate(dateStr) {
+            if (!dateStr) {
+                document.getElementById('historic-pkg-lists').innerHTML = '';
+                return;
+            }
+            loadSnapshotForDate(dateStr);
+        }
+
         if (typeof flatpickr !== 'undefined') {
             // Browse by date
             browsePicker = flatpickr('#browse-date', {
                 enable: availableDates,
                 dateFormat: 'Y-m-d',
-                onChange: function(selectedDates, dateStr) {
-                    if (!dateStr) {
-                        document.getElementById('historic-pkg-lists').innerHTML = '';
-                        return;
-                    }
-                    // Load the package lists for the selected date
-                    loadSnapshotForDate(dateStr);
-                }
+                onChange: function(selectedDates, dateStr) { handleBrowseDate(dateStr); }
             });
 
             // Compare two dates
@@ -516,6 +518,10 @@
             comparePickerB = flatpickr('#compare-date-b', {
                 enable: availableDates,
                 dateFormat: 'Y-m-d'
+            });
+        } else {
+            document.getElementById('browse-date').addEventListener('change', function() {
+                handleBrowseDate(this.value);
             });
         }
 
@@ -724,7 +730,26 @@
         document.getElementById('compare-btn').addEventListener('click', function() {
             var dateA = document.getElementById('compare-date-a').value;
             var dateB = document.getElementById('compare-date-b').value;
-            if (!dateA || !dateB || !dailyDates[dateA] || !dailyDates[dateB]) return;
+
+            if (!dateA && !dateB) {
+                showMessage('compare-results', 'Please select two dates to compare.');
+                return;
+            } else if (!dateA) {
+                showMessage('compare-results', 'Please select a date for Date A.');
+                return;
+            } else if (!dateB) {
+                showMessage('compare-results', 'Please select a date for Date B.');
+                return;
+            }
+
+            var missing = [dateA, dateB].filter(function(date, i, arr) {
+                return !dailyDates[date] && arr.indexOf(date) === i;
+            });
+            if (missing.length) {
+                showMessage('compare-results',
+                    'No package lists available for ' + missing.join(' or ') + '.');
+                return;
+            }
 
             Promise.all([
                 axios.get('history/' + dailyDates[dateA]),
