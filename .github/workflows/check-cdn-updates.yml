@@ -41,9 +41,8 @@ jobs:
           EXIT_CODE=$?
           echo "exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
 
-          # Exit codes: 0=up to date, 1=safe updates (create issue), 2=incompatible only (no issue)
-          # Any other code is an unhandled error
-          if [ "$EXIT_CODE" -eq 0 ] || [ "$EXIT_CODE" -eq 1 ] || [ "$EXIT_CODE" -eq 2 ]; then
+          # Exit codes: 0=up to date within LTS majors, 1=new major available (create issue)
+          if [ "$EXIT_CODE" -eq 0 ] || [ "$EXIT_CODE" -eq 1 ]; then
             exit $EXIT_CODE
           else
             echo "error=Audit script failed with unexpected exit code $EXIT_CODE" >> $GITHUB_OUTPUT
@@ -72,22 +71,14 @@ jobs:
 
           # Report based on exit code
           if [ "${{ steps.check.outputs.exit_code }}" = "0" ]; then
-            echo "✅ All CDN dependencies are up to date" >> $GITHUB_STEP_SUMMARY
+            echo "✅ All CDN dependencies are up to date within LTS major versions" >> $GITHUB_STEP_SUMMARY
           elif [ "${{ steps.check.outputs.exit_code }}" = "1" ]; then
             if [ -f cdn-update-report.md ]; then
               cat cdn-update-report.md >> $GITHUB_STEP_SUMMARY
               echo "" >> $GITHUB_STEP_SUMMARY
-              echo "📦 **Safe updates available** - see report above" >> $GITHUB_STEP_SUMMARY
+              echo "🔶 **New major version available** - see report above" >> $GITHUB_STEP_SUMMARY
             else
-              echo "⚠️ **Warning**: Exit code indicates updates but no report found" >> $GITHUB_STEP_SUMMARY
-            fi
-          elif [ "${{ steps.check.outputs.exit_code }}" = "2" ]; then
-            if [ -f cdn-update-report.md ]; then
-              cat cdn-update-report.md >> $GITHUB_STEP_SUMMARY
-              echo "" >> $GITHUB_STEP_SUMMARY
-              echo "ℹ️  **Only incompatible updates found** - see report above" >> $GITHUB_STEP_SUMMARY
-            else
-              echo "⚠️ **Warning**: Exit code indicates incompatible updates but no report found" >> $GITHUB_STEP_SUMMARY
+              echo "⚠️ **Warning**: Exit code indicates major update but no report found" >> $GITHUB_STEP_SUMMARY
             fi
           else
             echo "⚠️ **Unexpected exit code**: ${{ steps.check.outputs.exit_code }}" >> $GITHUB_STEP_SUMMARY
@@ -132,6 +123,7 @@ jobs:
             });
 
             const existingIssue = issues.data.find(issue =>
+              issue.title.includes('CDN Major Version Updates') ||
               issue.title.includes('CDN Dependency Updates')
             );
 
@@ -151,7 +143,7 @@ jobs:
               await github.rest.issues.create({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                title: '🔄 CDN Dependency Updates Available',
+                title: '🔶 CDN Major Version Updates Available',
                 body: report,
                 labels: ['dependencies', 'cdn', 'enhancement']
               });
