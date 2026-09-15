@@ -52,8 +52,10 @@
                                 <option value="all_source_nevrs">All — NEVRs</option>
                                 <option value="runtime_source_names">Runtime — Names</option>
                                 <option value="runtime_source_nevrs">Runtime — NEVRs</option>
+                                {% if view_all_arches.has_buildroot %}
                                 <option value="buildroot_source_names">Buildroot — Names</option>
                                 <option value="buildroot_source_nevrs">Buildroot — NEVRs</option>
+                                {% endif %}
                             </select>
                         </div>
                         <div class="col-auto">
@@ -707,26 +709,46 @@
 
             // Display results
             var container = document.getElementById('compare-results');
+
+            // Destroy previous DataTable if it exists
+            if ($.fn.DataTable.isDataTable('#table_packages')) {
+                $('#table_packages').DataTable().destroy();
+            }
+            
+            // Build table rows
+            var rows = [];
+            var maxLength = Math.max(onlyInA.length, onlyInB.length, inBoth.length);
+
+            for (var i = 0; i < maxLength; i++) {
+                rows.push(
+                    '<tr>'
+                    + '<td>' + (onlyInA[i] || '') + '</td>'
+                    + '<td>' + (onlyInB[i] || '') + '</td>'
+                    + '<td>' + (inBoth[i] || '') + '</td>'
+                    + '</tr>'
+                );
+            }
+
             container.innerHTML =
-                '<div class="text-center">'
-                + '<div class="card border-secondary">'
-                + '<div class="card-body">'
-                + '<div class="row align-items-center">'
-                + '<div class="col-6">'
-                +'<h6>Only in ' + dateA + ' (' + onlyInA.length + ')</h6>'
-                + '<pre>' + onlyInA.join('\n') + '</pre>'
-                + '</div>'
-                + '<div class="col-6">'
-                + '<h6>Only in ' + dateB + ' (' + onlyInB.length + ')</h6>'
-                + '<pre>' + onlyInB.join('\n') + '</pre>'
-                + '</div>'
-                + '<div class="col align-self-center">'
-                + '<h6>In Both (' + inBoth.length + ')</h6>'
-                + '<pre>' + inBoth.join('\n') + '</pre>'
-                + '</div>'
-                + '</div>'
-                + '</div>'
-                + '</div>';
+                '<table id="table_packages" class="table table-striped">'
+                + '<thead>'
+                + '<tr class="sort_control_row">'
+                + '<th>Only in ' + dateA + ' (' + onlyInA.length + ')</th>'
+                + '<th>Only in ' + dateB + ' (' + onlyInB.length + ')</th>'
+                + '<th>In Both (' + inBoth.length + ')</th>'
+                + '</tr>'
+                + '</thead>'
+                + '<tbody>'
+                + rows.join('')
+                + '</tbody>'
+                + '</table>';
+            
+            // Initialize DataTable
+            $('#table_packages').DataTable({
+                paging: false,
+                info: false,
+                order: []
+            });
         }
 
         // Compare two dates — fetch both snapshots, then show the set difference
