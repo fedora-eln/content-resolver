@@ -695,7 +695,6 @@
             // Compute set differences
             var onlyInA = [...setA].filter(function(x) { return !setB.has(x); }).sort();
             var onlyInB = [...setB].filter(function(x) { return !setA.has(x); }).sort();
-            var inBoth = [...setA].filter(function(x) { return setB.has(x); }).sort();
 
             // Display results
             var container = document.getElementById('compare-results');
@@ -707,14 +706,13 @@
 
             // Build table rows
             var rows = [];
-            var maxLength = Math.max(onlyInA.length, onlyInB.length, inBoth.length);
+            var maxLength = Math.max(onlyInA.length, onlyInB.length);
 
             for (var i = 0; i < maxLength; i++) {
                 rows.push(
                     '<tr>'
                     + '<td>' + (onlyInA[i] || '') + '</td>'
                     + '<td>' + (onlyInB[i] || '') + '</td>'
-                    + '<td>' + (inBoth[i] || '') + '</td>'
                     + '</tr>'
                 );
             }
@@ -725,7 +723,6 @@
                 + '<tr class="sort_control_row">'
                 + '<th>Only in ' + dateA + ' (' + onlyInA.length + ')</th>'
                 + '<th>Only in ' + dateB + ' (' + onlyInB.length + ')</th>'
-                + '<th>In Both (' + inBoth.length + ')</th>'
                 + '</tr>'
                 + '</thead>'
                 + '<tbody>'
